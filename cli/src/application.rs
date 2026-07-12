@@ -62,6 +62,12 @@ mod tests {
     }
 
     #[test]
+    fn recognizes_init_command() {
+        let cli = Cli::parse(["init"]).unwrap();
+        assert_eq!(cli.command, crate::cli::Command::Init);
+    }
+
+    #[test]
     fn reports_usage_errors_to_stderr() {
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
@@ -88,6 +94,7 @@ mod tests {
         assert!(stdout.is_empty());
         assert!(help.contains(javaup_core::PRODUCT_DESCRIPTION));
         assert!(help.contains("Usage: javaup <COMMAND>"));
+        assert!(help.contains("init"));
         assert!(help.contains("version"));
         assert!(help.contains("--help"));
     }
@@ -102,6 +109,7 @@ mod tests {
 
         assert_eq!(code, EXIT_SUCCESS);
         assert!(help.contains("Usage: javaup <COMMAND>"));
+        assert!(help.contains("init"));
         assert!(help.contains("version"));
         assert!(help.contains("--help"));
         assert!(stderr.is_empty());

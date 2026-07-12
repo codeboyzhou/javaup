@@ -31,6 +31,8 @@ impl Cli {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Subcommand)]
 pub(crate) enum Command {
+    /// Detect the current Maven project and record its required environment.
+    Init,
     /// Print version, platform and build information.
     Version,
 }
@@ -40,6 +42,12 @@ mod tests {
     use clap::error::ErrorKind;
 
     use super::*;
+
+    #[test]
+    fn parses_init_subcommand() {
+        let cli = Cli::parse(["init"]).unwrap();
+        assert_eq!(cli.command, Command::Init);
+    }
 
     #[test]
     fn parses_version_subcommand() {
