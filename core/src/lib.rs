@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod java;
 pub mod project;
 
 /// Product information shared by all frontends.

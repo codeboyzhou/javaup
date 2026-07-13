@@ -8,11 +8,15 @@ use std::path::{Path, PathBuf};
 use super::{
     ENVIRONMENT_FILE_NAME, MavenEnvironment, ProjectEnvironment, ProjectType, is_maven_version,
 };
+use crate::java::JdkInstallation;
 
 /// Error raised while loading or saving a `.javaup` environment file.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ProjectConfigError {
+    NotFound {
+        start: PathBuf,
+    },
     Read {
         path: PathBuf,
         source: io::Error,
@@ -43,6 +47,11 @@ pub enum ProjectConfigError {
 impl fmt::Display for ProjectConfigError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::NotFound { start } => write!(
+                formatter,
+                "could not find {ENVIRONMENT_FILE_NAME} in {} or its parent directories",
+                start.display()
+            ),
             Self::Read { path, source } => {
                 write!(formatter, "could not read {}: {source}", path.display())
             }
@@ -84,9 +93,10 @@ pub(super) fn save(
 ) -> Result<PathBuf, ProjectConfigError> {
     let path = project_dir.join(ENVIRONMENT_FILE_NAME);
     let contents = format!(
-        "project.type={}\njava.version={}\nmaven.version={}\nmaven.wrapper={}\n",
+        "project.type={}\njava.version={}\njava.home={}\nmaven.version={}\nmaven.wrapper={}\n",
         environment.project_type.as_str(),
-        environment.java_version,
+        environment.java.major_version(),
+        environment.java.home().display(),
         environment.maven.version,
         environment.maven.uses_wrapper
     );
@@ -117,6 +127,12 @@ pub(super) fn load(project_dir: &Path) -> Result<ProjectEnvironment, ProjectConf
         .filter(|version| *version >= 5)
         .ok_or_else(|| invalid_value(&path, "java.version", java_value))?;
 
+    let java_home_value = required(&path, &values, "java.home")?;
+    let java_home = PathBuf::from(java_home_value);
+    if !java_home.is_absolute() {
+        return Err(invalid_value(&path, "java.home", java_home_value));
+    }
+
     let maven_version = required(&path, &values, "maven.version")?;
     if !is_maven_version(maven_version) {
         return Err(invalid_value(&path, "maven.version", maven_version));
@@ -129,11 +145,25 @@ pub(super) fn load(project_dir: &Path) -> Result<ProjectEnvironment, ProjectConf
 
     Ok(ProjectEnvironment {
         project_type: ProjectType::Maven,
-        java_version,
+        java: JdkInstallation::recorded(java_version, java_home),
         maven: MavenEnvironment {
             version: maven_version.to_owned(),
             uses_wrapper,
         },
+    })
+}
+
+pub(super) fn load_nearest(
+    start: &Path,
+) -> Result<(PathBuf, ProjectEnvironment), ProjectConfigError> {
+    for directory in start.ancestors() {
+        if directory.join(ENVIRONMENT_FILE_NAME).is_file() {
+            return load(directory).map(|environment| (directory.to_owned(), environment));
+        }
+    }
+
+    Err(ProjectConfigError::NotFound {
+        start: start.to_owned(),
     })
 }
 
@@ -203,7 +233,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let environment = ProjectEnvironment {
             project_type: ProjectType::Maven,
-            java_version: 17,
+            java: JdkInstallation::recorded(17, directory.path().join("jdk-17")),
             maven: MavenEnvironment {
                 version: "3.9.9".to_owned(),
                 uses_wrapper: true,
@@ -217,7 +247,10 @@ mod tests {
         assert_eq!(loaded, environment);
         assert_eq!(
             fs::read_to_string(path).unwrap(),
-            "project.type=maven\njava.version=17\nmaven.version=3.9.9\nmaven.wrapper=true\n"
+            format!(
+                "project.type=maven\njava.version=17\njava.home={}\nmaven.version=3.9.9\nmaven.wrapper=true\n",
+                directory.path().join("jdk-17").display()
+            )
         );
     }
 
@@ -227,7 +260,7 @@ mod tests {
         let path = directory.path().join(ENVIRONMENT_FILE_NAME);
         fs::write(
             &path,
-            "project.type=maven\njava.version=abc\nmaven.version=3.9.9\nmaven.wrapper=false\n",
+            "project.type=maven\njava.version=abc\njava.home=/jdk\nmaven.version=3.9.9\nmaven.wrapper=false\n",
         )
         .unwrap();
 
@@ -239,5 +272,25 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn loads_the_nearest_parent_environment() {
+        let directory = tempfile::tempdir().unwrap();
+        let child = directory.path().join("module").join("src");
+        fs::create_dir_all(&child).unwrap();
+        fs::write(
+            directory.path().join(ENVIRONMENT_FILE_NAME),
+            format!(
+                "project.type=maven\njava.version=17\njava.home={}\nmaven.version=3.9.9\nmaven.wrapper=true\n",
+                directory.path().join("jdk-17").display()
+            ),
+        )
+        .unwrap();
+
+        let (project_dir, environment) = load_nearest(&child).unwrap();
+
+        assert_eq!(project_dir, directory.path());
+        assert_eq!(environment.java_version(), 17);
     }
 }

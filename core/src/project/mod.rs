@@ -2,9 +2,13 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::java::JdkInstallation;
+
+mod build;
 mod config;
 mod detection;
 
+pub use build::ProjectBuildError;
 pub use config::ProjectConfigError;
 pub use detection::ProjectDetectionError;
 
@@ -47,7 +51,7 @@ impl MavenEnvironment {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectEnvironment {
     project_type: ProjectType,
-    java_version: u32,
+    java: JdkInstallation,
     maven: MavenEnvironment,
 }
 
@@ -62,6 +66,11 @@ impl ProjectEnvironment {
         config::load(project_dir.as_ref())
     }
 
+    /// Loads the nearest `.javaup` from `start` or one of its parent directories.
+    pub fn load_nearest(start: impl AsRef<Path>) -> Result<(PathBuf, Self), ProjectConfigError> {
+        config::load_nearest(start.as_ref())
+    }
+
     /// Saves this environment to `.javaup` and returns the written path.
     pub fn save(&self, project_dir: impl AsRef<Path>) -> Result<PathBuf, ProjectConfigError> {
         config::save(project_dir.as_ref(), self)
@@ -72,11 +81,28 @@ impl ProjectEnvironment {
     }
 
     pub fn java_version(&self) -> u32 {
-        self.java_version
+        self.java.major_version()
+    }
+
+    pub fn java_home(&self) -> &Path {
+        self.java.home()
     }
 
     pub fn maven(&self) -> &MavenEnvironment {
         &self.maven
+    }
+
+    /// Creates a Maven command configured to use this environment's JDK.
+    pub fn maven_command<I, S>(
+        &self,
+        project_dir: impl AsRef<Path>,
+        arguments: I,
+    ) -> Result<std::process::Command, ProjectBuildError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        build::maven_command(project_dir.as_ref(), self, arguments)
     }
 }
 

@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 use std::iter;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 /// Command-line interface for managing Java installations.
 #[derive(Debug, Parser)]
@@ -29,12 +29,21 @@ impl Cli {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Subcommand)]
+#[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
 pub(crate) enum Command {
     /// Detect the current Maven project and record its required environment.
     Init,
+    /// Build the project with the JDK recorded in `.javaup`.
+    Build(BuildArgs),
     /// Print version, platform and build information.
     Version,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Args)]
+pub(crate) struct BuildArgs {
+    /// Maven goals and options; defaults to `clean package`.
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    pub(crate) maven_arguments: Vec<OsString>,
 }
 
 #[cfg(test)]
@@ -53,6 +62,17 @@ mod tests {
     fn parses_version_subcommand() {
         let cli = Cli::parse(["version"]).unwrap();
         assert_eq!(cli.command, Command::Version);
+    }
+
+    #[test]
+    fn parses_build_arguments() {
+        let cli = Cli::parse(["build", "test", "-DskipTests"]).unwrap();
+        assert_eq!(
+            cli.command,
+            Command::Build(BuildArgs {
+                maven_arguments: vec!["test".into(), "-DskipTests".into()],
+            })
+        );
     }
 
     #[test]

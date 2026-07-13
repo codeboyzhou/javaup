@@ -13,9 +13,10 @@ where
 
     writeln!(
         stdout,
-        "created {} (Java {}, Maven {}, wrapper: {})",
+        "created {} (JDK {} at {}, Maven {}, wrapper: {})",
         config_path.display(),
         environment.java_version(),
+        environment.java_home().display(),
         environment.maven().version(),
         environment.maven().uses_wrapper()
     )

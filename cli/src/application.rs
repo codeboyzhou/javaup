@@ -31,7 +31,7 @@ where
     };
 
     match commands::execute(cli.command, stdout) {
-        Ok(()) => EXIT_SUCCESS,
+        Ok(outcome) => outcome.exit_code(),
         Err(error) => {
             let _ = writeln!(stderr, "error: {error}");
             EXIT_FAILURE
@@ -95,6 +95,7 @@ mod tests {
         assert!(help.contains(javaup_core::PRODUCT_DESCRIPTION));
         assert!(help.contains("Usage: javaup <COMMAND>"));
         assert!(help.contains("init"));
+        assert!(help.contains("build"));
         assert!(help.contains("version"));
         assert!(help.contains("--help"));
     }
@@ -110,6 +111,7 @@ mod tests {
         assert_eq!(code, EXIT_SUCCESS);
         assert!(help.contains("Usage: javaup <COMMAND>"));
         assert!(help.contains("init"));
+        assert!(help.contains("build"));
         assert!(help.contains("version"));
         assert!(help.contains("--help"));
         assert!(stderr.is_empty());

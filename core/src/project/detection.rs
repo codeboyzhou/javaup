@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 
 use super::{MavenEnvironment, ProjectEnvironment, ProjectType, is_maven_version};
+use crate::java::{JdkDiscoveryError, JdkInstallation, parse_java_major};
 
 const POM_FILE_NAME: &str = "pom.xml";
 
@@ -14,13 +15,33 @@ const POM_FILE_NAME: &str = "pom.xml";
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ProjectDetectionError {
-    NotMavenProject { project_dir: PathBuf },
-    FileAccess { path: PathBuf, source: io::Error },
-    InvalidPom { path: PathBuf, message: String },
-    JavaVersionNotFound { pom_path: PathBuf },
-    MavenWrapperVersionNotFound { properties_path: PathBuf },
-    MavenCommandUnavailable { source: io::Error },
-    MavenCommandFailed { status: ExitStatus },
+    NotMavenProject {
+        project_dir: PathBuf,
+    },
+    FileAccess {
+        path: PathBuf,
+        source: io::Error,
+    },
+    InvalidPom {
+        path: PathBuf,
+        message: String,
+    },
+    JavaVersionNotFound {
+        pom_path: PathBuf,
+    },
+    JdkDiscovery {
+        major_version: u32,
+        source: JdkDiscoveryError,
+    },
+    MavenWrapperVersionNotFound {
+        properties_path: PathBuf,
+    },
+    MavenCommandUnavailable {
+        source: io::Error,
+    },
+    MavenCommandFailed {
+        status: ExitStatus,
+    },
     MavenVersionNotFound,
 }
 
@@ -43,6 +64,10 @@ impl fmt::Display for ProjectDetectionError {
                 "could not determine the Java version from {} (set java.version, maven.compiler.release, maven.compiler.target, or compiler/toolchains plugin configuration)",
                 pom_path.display()
             ),
+            Self::JdkDiscovery {
+                major_version,
+                source,
+            } => write!(formatter, "could not resolve JDK {major_version}: {source}"),
             Self::MavenWrapperVersionNotFound { properties_path } => write!(
                 formatter,
                 "could not determine the Maven version from {}",
@@ -69,6 +94,7 @@ impl Error for ProjectDetectionError {
             Self::FileAccess { source, .. } | Self::MavenCommandUnavailable { source } => {
                 Some(source)
             }
+            Self::JdkDiscovery { source, .. } => Some(source),
             _ => None,
         }
     }
@@ -83,10 +109,16 @@ pub(super) fn detect(project_dir: &Path) -> Result<ProjectEnvironment, ProjectDe
     }
 
     let java_version = detect_java_version(&pom_path)?;
+    let java = JdkInstallation::discover(java_version).map_err(|source| {
+        ProjectDetectionError::JdkDiscovery {
+            major_version: java_version,
+            source,
+        }
+    })?;
     let maven = detect_maven(project_dir)?;
     Ok(ProjectEnvironment {
         project_type: ProjectType::Maven,
-        java_version,
+        java,
         maven,
     })
 }
@@ -385,17 +417,6 @@ fn resolve_value(value: &str, properties: &HashMap<String, String>) -> Option<St
     }
 }
 
-fn parse_java_major(value: &str) -> Option<u32> {
-    let value = value.trim().trim_start_matches(['[', '(']);
-    let major = value.strip_prefix("1.").unwrap_or(value);
-    let digits: String = major
-        .chars()
-        .take_while(|character| character.is_ascii_digit())
-        .collect();
-    let major = digits.parse().ok()?;
-    (major >= 5).then_some(major)
-}
-
 fn read_to_string(path: &Path) -> Result<String, ProjectDetectionError> {
     fs::read_to_string(path).map_err(|source| ProjectDetectionError::FileAccess {
         path: path.to_owned(),
@@ -453,7 +474,7 @@ mod tests {
             parent_directory.join(POM_FILE_NAME),
             r#"<project><properties><java.release>17</java.release></properties></project>"#,
         )
-            .unwrap();
+        .unwrap();
         fs::write(
             project_directory.join(POM_FILE_NAME),
             r#"<project>
@@ -482,7 +503,7 @@ mod tests {
                 </plugin></plugins></build>
             </project>"#,
         )
-            .unwrap();
+        .unwrap();
 
         assert_eq!(detect_java_version(&pom).unwrap(), 11);
     }
@@ -514,21 +535,22 @@ mod tests {
             directory.path().join(POM_FILE_NAME),
             r#"<project><properties><java.version>1.8</java.version></properties></project>"#,
         )
-            .unwrap();
+        .unwrap();
         fs::write(
             directory
                 .path()
                 .join(".mvn/wrapper/maven-wrapper.properties"),
             "distributionUrl=https://example.test/apache-maven-3.9.9-bin.zip\n",
         )
-            .unwrap();
+        .unwrap();
 
-        let environment = ProjectEnvironment::detect(directory.path()).unwrap();
-
-        assert_eq!(environment.project_type(), ProjectType::Maven);
-        assert_eq!(environment.java_version(), 8);
-        assert_eq!(environment.maven().version(), "3.9.9");
-        assert!(environment.maven().uses_wrapper());
+        assert_eq!(
+            detect_java_version(&directory.path().join(POM_FILE_NAME)).unwrap(),
+            8
+        );
+        let maven = detect_maven(directory.path()).unwrap();
+        assert_eq!(maven.version(), "3.9.9");
+        assert!(maven.uses_wrapper());
     }
 
     #[test]
