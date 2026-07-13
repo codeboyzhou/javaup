@@ -4,7 +4,7 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus};
+use std::process::{Command, ExitStatus, Output};
 
 use super::{MavenEnvironment, ProjectEnvironment, ProjectType, is_maven_version};
 
@@ -106,10 +106,7 @@ fn detect_maven(project_dir: &Path) -> Result<MavenEnvironment, ProjectDetection
         });
     }
 
-    let output = Command::new("mvn")
-        .arg("--version")
-        .current_dir(project_dir)
-        .output()
+    let output = run_maven_version(project_dir)
         .map_err(|source| ProjectDetectionError::MavenCommandUnavailable { source })?;
     if !output.status.success() {
         return Err(ProjectDetectionError::MavenCommandFailed {
@@ -128,6 +125,35 @@ fn detect_maven(project_dir: &Path) -> Result<MavenEnvironment, ProjectDetection
         version,
         uses_wrapper: false,
     })
+}
+
+fn run_maven_version(project_dir: &Path) -> io::Result<Output> {
+    let mut last_not_found = None;
+    for executable in maven_command_candidates() {
+        match Command::new(executable)
+            .arg("--version")
+            .current_dir(project_dir)
+            .output()
+        {
+            Ok(output) => return Ok(output),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                last_not_found = Some(error);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(last_not_found.expect("Maven command candidates must not be empty"))
+}
+
+#[cfg(windows)]
+fn maven_command_candidates() -> &'static [&'static str] {
+    &["mvn.cmd", "mvn.bat", "mvn.exe", "mvn"]
+}
+
+#[cfg(not(windows))]
+fn maven_command_candidates() -> &'static [&'static str] {
+    &["mvn"]
 }
 
 fn parse_wrapper_maven_version(contents: &str) -> Option<String> {
@@ -410,6 +436,12 @@ mod tests {
         );
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn prefers_the_windows_maven_command_launcher() {
+        assert_eq!(maven_command_candidates().first(), Some(&"mvn.cmd"));
+    }
+
     #[test]
     fn detects_property_references_and_parent_poms() {
         let directory = tempfile::tempdir().unwrap();
@@ -421,7 +453,7 @@ mod tests {
             parent_directory.join(POM_FILE_NAME),
             r#"<project><properties><java.release>17</java.release></properties></project>"#,
         )
-        .unwrap();
+            .unwrap();
         fs::write(
             project_directory.join(POM_FILE_NAME),
             r#"<project>
@@ -429,7 +461,7 @@ mod tests {
                 <properties><maven.compiler.release>${java.release}</maven.compiler.release></properties>
             </project>"#,
         )
-        .unwrap();
+            .unwrap();
 
         assert_eq!(
             detect_java_version(&project_directory.join(POM_FILE_NAME)).unwrap(),
@@ -450,7 +482,7 @@ mod tests {
                 </plugin></plugins></build>
             </project>"#,
         )
-        .unwrap();
+            .unwrap();
 
         assert_eq!(detect_java_version(&pom).unwrap(), 11);
     }
@@ -469,7 +501,7 @@ mod tests {
                 </plugin></plugins></build>
             </project>"#,
         )
-        .unwrap();
+            .unwrap();
 
         assert_eq!(detect_java_version(&pom).unwrap(), 11);
     }
@@ -482,14 +514,14 @@ mod tests {
             directory.path().join(POM_FILE_NAME),
             r#"<project><properties><java.version>1.8</java.version></properties></project>"#,
         )
-        .unwrap();
+            .unwrap();
         fs::write(
             directory
                 .path()
                 .join(".mvn/wrapper/maven-wrapper.properties"),
             "distributionUrl=https://example.test/apache-maven-3.9.9-bin.zip\n",
         )
-        .unwrap();
+            .unwrap();
 
         let environment = ProjectEnvironment::detect(directory.path()).unwrap();
 
