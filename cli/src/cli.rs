@@ -33,7 +33,7 @@ impl Cli {
 pub(crate) enum Command {
     /// Detect the current Maven project and record its required environment.
     Init,
-    /// Build the project with the JDK recorded in `.javaup`.
+    /// Build the project with the JDK recorded by `javaup init`.
     Build(BuildArgs),
     /// Print version, platform and build information.
     Version,

@@ -12,9 +12,6 @@ pub use build::ProjectBuildError;
 pub use config::ProjectConfigError;
 pub use detection::ProjectDetectionError;
 
-/// Name of the environment file stored in a project's root directory.
-pub const ENVIRONMENT_FILE_NAME: &str = ".javaup";
-
 /// Build system used by a detected project.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
@@ -61,17 +58,17 @@ impl ProjectEnvironment {
         detection::detect(project_dir.as_ref())
     }
 
-    /// Loads a previously saved environment from `.javaup`.
+    /// Loads a previously saved environment for `project_dir`.
     pub fn load(project_dir: impl AsRef<Path>) -> Result<Self, ProjectConfigError> {
         config::load(project_dir.as_ref())
     }
 
-    /// Loads the nearest `.javaup` from `start` or one of its parent directories.
+    /// Loads the nearest saved environment from `start` or one of its parent directories.
     pub fn load_nearest(start: impl AsRef<Path>) -> Result<(PathBuf, Self), ProjectConfigError> {
         config::load_nearest(start.as_ref())
     }
 
-    /// Saves this environment to `.javaup` and returns the written path.
+    /// Saves this environment in javaup's user-level configuration directory.
     pub fn save(&self, project_dir: impl AsRef<Path>) -> Result<PathBuf, ProjectConfigError> {
         config::save(project_dir.as_ref(), self)
     }

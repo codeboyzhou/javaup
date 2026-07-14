@@ -1,16 +1,20 @@
 use std::collections::HashMap;
+use std::env;
 use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::{
-    ENVIRONMENT_FILE_NAME, MavenEnvironment, ProjectEnvironment, ProjectType, is_maven_version,
-};
+use sha2::{Digest, Sha256};
+
+use super::{MavenEnvironment, ProjectEnvironment, ProjectType, is_maven_version};
 use crate::java::JdkInstallation;
 
-/// Error raised while loading or saving a `.javaup` environment file.
+const PROJECTS_DIRECTORY_NAME: &str = "projects";
+const ENVIRONMENT_FILE_EXTENSION: &str = "properties";
+
+/// Error raised while loading or saving a project environment.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ProjectConfigError {
@@ -25,6 +29,11 @@ pub enum ProjectConfigError {
         path: PathBuf,
         source: io::Error,
     },
+    ResolveProjectPath {
+        path: PathBuf,
+        source: io::Error,
+    },
+    StorageDirectoryUnavailable,
     InvalidLine {
         path: PathBuf,
         line: usize,
@@ -49,7 +58,7 @@ impl fmt::Display for ProjectConfigError {
         match self {
             Self::NotFound { start } => write!(
                 formatter,
-                "could not find {ENVIRONMENT_FILE_NAME} in {} or its parent directories",
+                "could not find a saved javaup environment for {} or its parent directories",
                 start.display()
             ),
             Self::Read { path, source } => {
@@ -58,6 +67,15 @@ impl fmt::Display for ProjectConfigError {
             Self::Write { path, source } => {
                 write!(formatter, "could not write {}: {source}", path.display())
             }
+            Self::ResolveProjectPath { path, source } => write!(
+                formatter,
+                "could not resolve project path {}: {source}",
+                path.display()
+            ),
+            Self::StorageDirectoryUnavailable => write!(
+                formatter,
+                "could not determine the javaup storage directory; set JAVAUP_HOME"
+            ),
             Self::InvalidLine { path, line } => write!(
                 formatter,
                 "invalid environment entry at {}:{line}; expected key=value",
@@ -81,7 +99,9 @@ impl fmt::Display for ProjectConfigError {
 impl Error for ProjectConfigError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Read { source, .. } | Self::Write { source, .. } => Some(source),
+            Self::Read { source, .. }
+            | Self::Write { source, .. }
+            | Self::ResolveProjectPath { source, .. } => Some(source),
             _ => None,
         }
     }
@@ -91,15 +111,36 @@ pub(super) fn save(
     project_dir: &Path,
     environment: &ProjectEnvironment,
 ) -> Result<PathBuf, ProjectConfigError> {
-    let path = project_dir.join(ENVIRONMENT_FILE_NAME);
+    save_in(&storage_directory()?, project_dir, environment)
+}
+
+fn save_in(
+    storage_directory: &Path,
+    project_dir: &Path,
+    environment: &ProjectEnvironment,
+) -> Result<PathBuf, ProjectConfigError> {
+    let path = environment_path(storage_directory, project_dir)?;
+    let absolute_project_dir = std::path::absolute(project_dir).map_err(|source| {
+        ProjectConfigError::ResolveProjectPath {
+            path: project_dir.to_owned(),
+            source,
+        }
+    })?;
     let contents = format!(
-        "project.type={}\njava.version={}\njava.home={}\nmaven.version={}\nmaven.wrapper={}\n",
+        "project.path={}\nproject.type={}\njava.version={}\njava.home={}\nmaven.version={}\nmaven.wrapper={}\n",
+        absolute_project_dir.display(),
         environment.project_type.as_str(),
         environment.java.major_version(),
         environment.java.home().display(),
         environment.maven.version,
         environment.maven.uses_wrapper
     );
+    fs::create_dir_all(path.parent().expect("environment path must have a parent")).map_err(
+        |source| ProjectConfigError::Write {
+            path: path.clone(),
+            source,
+        },
+    )?;
     fs::write(&path, contents).map_err(|source| ProjectConfigError::Write {
         path: path.clone(),
         source,
@@ -108,40 +149,51 @@ pub(super) fn save(
 }
 
 pub(super) fn load(project_dir: &Path) -> Result<ProjectEnvironment, ProjectConfigError> {
-    let path = project_dir.join(ENVIRONMENT_FILE_NAME);
-    let contents = fs::read_to_string(&path).map_err(|source| ProjectConfigError::Read {
-        path: path.clone(),
+    load_in(&storage_directory()?, project_dir)
+}
+
+fn load_in(
+    storage_directory: &Path,
+    project_dir: &Path,
+) -> Result<ProjectEnvironment, ProjectConfigError> {
+    let path = environment_path(storage_directory, project_dir)?;
+    load_path(&path)
+}
+
+fn load_path(path: &Path) -> Result<ProjectEnvironment, ProjectConfigError> {
+    let contents = fs::read_to_string(path).map_err(|source| ProjectConfigError::Read {
+        path: path.to_owned(),
         source,
     })?;
-    let values = parse_entries(&path, &contents)?;
+    let values = parse_entries(path, &contents)?;
 
-    let project_type = required(&path, &values, "project.type")?;
+    let project_type = required(path, &values, "project.type")?;
     if project_type != "maven" {
-        return Err(invalid_value(&path, "project.type", project_type));
+        return Err(invalid_value(path, "project.type", project_type));
     }
 
-    let java_value = required(&path, &values, "java.version")?;
+    let java_value = required(path, &values, "java.version")?;
     let java_version = java_value
         .parse::<u32>()
         .ok()
         .filter(|version| *version >= 5)
-        .ok_or_else(|| invalid_value(&path, "java.version", java_value))?;
+        .ok_or_else(|| invalid_value(path, "java.version", java_value))?;
 
-    let java_home_value = required(&path, &values, "java.home")?;
+    let java_home_value = required(path, &values, "java.home")?;
     let java_home = PathBuf::from(java_home_value);
     if !java_home.is_absolute() {
-        return Err(invalid_value(&path, "java.home", java_home_value));
+        return Err(invalid_value(path, "java.home", java_home_value));
     }
 
-    let maven_version = required(&path, &values, "maven.version")?;
+    let maven_version = required(path, &values, "maven.version")?;
     if !is_maven_version(maven_version) {
-        return Err(invalid_value(&path, "maven.version", maven_version));
+        return Err(invalid_value(path, "maven.version", maven_version));
     }
 
-    let wrapper_value = required(&path, &values, "maven.wrapper")?;
+    let wrapper_value = required(path, &values, "maven.wrapper")?;
     let uses_wrapper = wrapper_value
         .parse::<bool>()
-        .map_err(|_| invalid_value(&path, "maven.wrapper", wrapper_value))?;
+        .map_err(|_| invalid_value(path, "maven.wrapper", wrapper_value))?;
 
     Ok(ProjectEnvironment {
         project_type: ProjectType::Maven,
@@ -156,15 +208,110 @@ pub(super) fn load(project_dir: &Path) -> Result<ProjectEnvironment, ProjectConf
 pub(super) fn load_nearest(
     start: &Path,
 ) -> Result<(PathBuf, ProjectEnvironment), ProjectConfigError> {
+    load_nearest_in(&storage_directory()?, start)
+}
+
+fn load_nearest_in(
+    storage_directory: &Path,
+    start: &Path,
+) -> Result<(PathBuf, ProjectEnvironment), ProjectConfigError> {
     for directory in start.ancestors() {
-        if directory.join(ENVIRONMENT_FILE_NAME).is_file() {
-            return load(directory).map(|environment| (directory.to_owned(), environment));
+        let path = environment_path(storage_directory, directory)?;
+        if path.is_file() {
+            return load_path(&path).map(|environment| (directory.to_owned(), environment));
         }
     }
 
     Err(ProjectConfigError::NotFound {
         start: start.to_owned(),
     })
+}
+
+fn environment_path(
+    storage_directory: &Path,
+    project_dir: &Path,
+) -> Result<PathBuf, ProjectConfigError> {
+    let canonical_project_dir =
+        fs::canonicalize(project_dir).map_err(|source| ProjectConfigError::ResolveProjectPath {
+            path: project_dir.to_owned(),
+            source,
+        })?;
+    let identity = project_identity(&canonical_project_dir);
+    let digest = Sha256::digest(identity.as_bytes());
+    let project_key = encode_hex(&digest);
+    Ok(storage_directory
+        .join(PROJECTS_DIRECTORY_NAME)
+        .join(format!("{project_key}.{ENVIRONMENT_FILE_EXTENSION}")))
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
+
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        encoded.push(HEX_DIGITS[(byte >> 4) as usize] as char);
+        encoded.push(HEX_DIGITS[(byte & 0x0f) as usize] as char);
+    }
+    encoded
+}
+
+#[cfg(windows)]
+fn project_identity(path: &Path) -> String {
+    path.to_string_lossy().to_lowercase()
+}
+
+#[cfg(not(windows))]
+fn project_identity(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
+}
+
+fn storage_directory() -> Result<PathBuf, ProjectConfigError> {
+    if let Some(path) = env::var_os("JAVAUP_HOME").filter(|path| !path.is_empty()) {
+        return Ok(PathBuf::from(path));
+    }
+
+    platform_storage_directory().ok_or(ProjectConfigError::StorageDirectoryUnavailable)
+}
+
+#[cfg(windows)]
+fn platform_storage_directory() -> Option<PathBuf> {
+    env::var_os("APPDATA")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .map(|path| path.join(crate::PRODUCT_NAME))
+}
+
+#[cfg(target_os = "macos")]
+fn platform_storage_directory() -> Option<PathBuf> {
+    env::var_os("HOME")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .map(|path| {
+            path.join("Library")
+                .join("Application Support")
+                .join(crate::PRODUCT_NAME)
+        })
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn platform_storage_directory() -> Option<PathBuf> {
+    if let Some(path) = env::var_os("XDG_CONFIG_HOME")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+    {
+        return Some(path.join(crate::PRODUCT_NAME));
+    }
+
+    env::var_os("HOME")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .map(|path| path.join(".config").join(crate::PRODUCT_NAME))
+}
+
+#[cfg(not(any(windows, unix)))]
+fn platform_storage_directory() -> Option<PathBuf> {
+    None
 }
 
 fn parse_entries(
@@ -228,43 +375,69 @@ fn invalid_value(path: &Path, key: &'static str, value: &str) -> ProjectConfigEr
 mod tests {
     use super::*;
 
-    #[test]
-    fn saves_and_loads_an_environment() {
-        let directory = tempfile::tempdir().unwrap();
-        let environment = ProjectEnvironment {
+    fn environment(project_dir: &Path, java_version: u32) -> ProjectEnvironment {
+        ProjectEnvironment {
             project_type: ProjectType::Maven,
-            java: JdkInstallation::recorded(17, directory.path().join("jdk-17")),
+            java: JdkInstallation::recorded(
+                java_version,
+                project_dir.join(format!("jdk-{java_version}")),
+            ),
             maven: MavenEnvironment {
                 version: "3.9.9".to_owned(),
                 uses_wrapper: true,
             },
-        };
+        }
+    }
 
-        let path = environment.save(directory.path()).unwrap();
-        let loaded = ProjectEnvironment::load(directory.path()).unwrap();
+    #[test]
+    fn saves_and_loads_an_environment_outside_the_project() {
+        let project = tempfile::tempdir().unwrap();
+        let storage = tempfile::tempdir().unwrap();
+        let environment = environment(project.path(), 17);
 
-        assert_eq!(path, directory.path().join(ENVIRONMENT_FILE_NAME));
+        let path = save_in(storage.path(), project.path(), &environment).unwrap();
+        let loaded = load_in(storage.path(), project.path()).unwrap();
+
+        assert_eq!(
+            path.parent().unwrap(),
+            storage.path().join(PROJECTS_DIRECTORY_NAME)
+        );
+        assert_eq!(
+            path.extension().and_then(|value| value.to_str()),
+            Some("properties")
+        );
+        let project_key = path.file_stem().unwrap().to_string_lossy();
+        assert_eq!(project_key.len(), 64);
+        assert!(
+            project_key
+                .chars()
+                .all(|character| character.is_ascii_hexdigit())
+        );
+        assert_eq!(fs::read_dir(project.path()).unwrap().count(), 0);
         assert_eq!(loaded, environment);
         assert_eq!(
             fs::read_to_string(path).unwrap(),
             format!(
-                "project.type=maven\njava.version=17\njava.home={}\nmaven.version=3.9.9\nmaven.wrapper=true\n",
-                directory.path().join("jdk-17").display()
+                "project.path={}\nproject.type=maven\njava.version=17\njava.home={}\nmaven.version=3.9.9\nmaven.wrapper=true\n",
+                project.path().display(),
+                project.path().join("jdk-17").display()
             )
         );
     }
 
     #[test]
     fn rejects_incomplete_and_invalid_files() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join(ENVIRONMENT_FILE_NAME);
+        let project = tempfile::tempdir().unwrap();
+        let storage = tempfile::tempdir().unwrap();
+        let path = environment_path(storage.path(), project.path()).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(
             &path,
             "project.type=maven\njava.version=abc\njava.home=/jdk\nmaven.version=3.9.9\nmaven.wrapper=false\n",
         )
         .unwrap();
 
-        let error = ProjectEnvironment::load(directory.path()).unwrap_err();
+        let error = load_in(storage.path(), project.path()).unwrap_err();
         assert!(matches!(
             error,
             ProjectConfigError::InvalidValue {
@@ -275,22 +448,36 @@ mod tests {
     }
 
     #[test]
-    fn loads_the_nearest_parent_environment() {
-        let directory = tempfile::tempdir().unwrap();
-        let child = directory.path().join("module").join("src");
+    fn loads_the_nearest_parent_environment_from_user_storage() {
+        let project = tempfile::tempdir().unwrap();
+        let storage = tempfile::tempdir().unwrap();
+        let child = project.path().join("module").join("src");
         fs::create_dir_all(&child).unwrap();
-        fs::write(
-            directory.path().join(ENVIRONMENT_FILE_NAME),
-            format!(
-                "project.type=maven\njava.version=17\njava.home={}\nmaven.version=3.9.9\nmaven.wrapper=true\n",
-                directory.path().join("jdk-17").display()
-            ),
+        save_in(
+            storage.path(),
+            project.path(),
+            &environment(project.path(), 17),
         )
         .unwrap();
 
-        let (project_dir, environment) = load_nearest(&child).unwrap();
+        let (project_dir, environment) = load_nearest_in(storage.path(), &child).unwrap();
 
-        assert_eq!(project_dir, directory.path());
+        assert_eq!(project_dir, project.path());
         assert_eq!(environment.java_version(), 17);
+    }
+
+    #[test]
+    fn uses_distinct_storage_files_for_distinct_projects() {
+        let parent = tempfile::tempdir().unwrap();
+        let storage = tempfile::tempdir().unwrap();
+        let first = parent.path().join("first");
+        let second = parent.path().join("second");
+        fs::create_dir_all(&first).unwrap();
+        fs::create_dir_all(&second).unwrap();
+
+        assert_ne!(
+            environment_path(storage.path(), &first).unwrap(),
+            environment_path(storage.path(), &second).unwrap()
+        );
     }
 }
