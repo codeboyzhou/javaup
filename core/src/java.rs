@@ -301,6 +301,7 @@ fn override_variable(major_version: u32) -> String {
 
 fn candidate_homes(major_version: u32) -> Vec<PathBuf> {
     let mut candidates = CandidateHomes::default();
+    let mut nearby_roots = CandidateHomes::default();
 
     for variable in [
         format!("JAVA_HOME_{major_version}"),
@@ -311,7 +312,7 @@ fn candidate_homes(major_version: u32) -> Vec<PathBuf> {
         "JDK_HOME".to_owned(),
     ] {
         if let Some(home) = env::var_os(variable) {
-            candidates.push(home);
+            push_home_and_parent(&mut candidates, &mut nearby_roots, home);
         }
     }
 
@@ -326,27 +327,43 @@ fn candidate_homes(major_version: u32) -> Vec<PathBuf> {
                     continue;
                 };
                 if home.join("release").is_file() {
-                    candidates.push(home);
+                    push_home_and_parent(&mut candidates, &mut nearby_roots, home);
                 }
             }
         }
     }
 
-    for root in installation_roots() {
-        candidates.push(root.join("current"));
-        let Ok(entries) = fs::read_dir(&root) else {
-            continue;
-        };
-        let mut entries: Vec<_> = entries.flatten().map(|entry| entry.path()).collect();
-        entries.sort();
-        for entry in entries {
-            candidates.push(&entry);
-            candidates.push(entry.join("current"));
-            candidates.push(entry.join("Contents").join("Home"));
-        }
+    for root in nearby_roots.values.into_iter().chain(installation_roots()) {
+        push_homes_under_root(&mut candidates, &root);
     }
 
     candidates.values
+}
+
+fn push_home_and_parent(
+    candidates: &mut CandidateHomes,
+    nearby_roots: &mut CandidateHomes,
+    home: impl AsRef<OsStr>,
+) {
+    let home = PathBuf::from(home.as_ref());
+    candidates.push(&home);
+    if let Some(parent) = home.parent().filter(|parent| parent.is_absolute()) {
+        nearby_roots.push(parent);
+    }
+}
+
+fn push_homes_under_root(candidates: &mut CandidateHomes, root: &Path) {
+    candidates.push(root.join("current"));
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    let mut entries: Vec<_> = entries.flatten().map(|entry| entry.path()).collect();
+    entries.sort();
+    for entry in entries {
+        candidates.push(&entry);
+        candidates.push(entry.join("current"));
+        candidates.push(entry.join("Contents").join("Home"));
+    }
 }
 
 #[derive(Default)]
@@ -441,16 +458,20 @@ mod tests {
 
     fn fake_jdk(major_version: &str) -> tempfile::TempDir {
         let directory = tempfile::tempdir().unwrap();
-        let bin = directory.path().join("bin");
-        fs::create_dir(&bin).unwrap();
+        write_fake_jdk(directory.path(), major_version);
+        directory
+    }
+
+    fn write_fake_jdk(home: &Path, major_version: &str) {
+        let bin = home.join("bin");
+        fs::create_dir_all(&bin).unwrap();
         fs::write(
-            directory.path().join("release"),
+            home.join("release"),
             format!("JAVA_VERSION=\"{major_version}\"\n"),
         )
         .unwrap();
         fs::write(bin.join(executable_name("java")), "").unwrap();
         fs::write(bin.join(executable_name("javac")), "").unwrap();
-        directory
     }
 
     #[test]
@@ -487,5 +508,28 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn discovers_a_jdk_beside_a_configured_jdk_home() {
+        let directory = tempfile::tempdir().unwrap();
+        let configured_home = directory.path().join("OpenJDK17");
+        let expected_home = directory.path().join("OpenJDK8");
+        write_fake_jdk(&configured_home, "17.0.12");
+        write_fake_jdk(&expected_home, "1.8.0_442");
+
+        let mut candidates = CandidateHomes::default();
+        let mut nearby_roots = CandidateHomes::default();
+        push_home_and_parent(&mut candidates, &mut nearby_roots, &configured_home);
+        for root in nearby_roots.values {
+            push_homes_under_root(&mut candidates, &root);
+        }
+        let installation = candidates
+            .values
+            .into_iter()
+            .find_map(|home| inspect_home(home, 8).ok())
+            .unwrap();
+
+        assert_eq!(installation.home(), expected_home);
     }
 }
