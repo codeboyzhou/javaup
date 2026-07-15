@@ -6,7 +6,7 @@ license.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "javaup"
+name = "jup"
 path = "src/main.rs"
 
 [dependencies]

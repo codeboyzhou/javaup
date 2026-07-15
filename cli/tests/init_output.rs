@@ -39,7 +39,7 @@ fn init_reports_each_stage_and_saves_the_environment() {
     .unwrap();
     write_fake_jdk(&java_home, 17);
 
-    let result = Command::new(env!("CARGO_BIN_EXE_javaup"))
+    let result = Command::new(env!("CARGO_BIN_EXE_jup"))
         .arg("init")
         .current_dir(&project)
         .env("JAVAUP_JDK_17_HOME", &java_home)
@@ -91,7 +91,7 @@ fn init_reports_each_stage_and_saves_the_environment() {
 fn init_reports_failures_after_the_last_started_stage() {
     let project = tempfile::tempdir().unwrap();
 
-    let result = Command::new(env!("CARGO_BIN_EXE_javaup"))
+    let result = Command::new(env!("CARGO_BIN_EXE_jup"))
         .arg("init")
         .current_dir(project.path())
         .env("NO_COLOR", "1")

@@ -96,7 +96,7 @@ mod tests {
         assert_eq!(code, EXIT_USAGE);
         assert!(stdout.is_empty());
         assert!(error.contains("unrecognized subcommand 'unknown'"));
-        assert!(error.contains("Usage: javaup <COMMAND>"));
+        assert!(error.contains("Usage: jup <COMMAND>"));
         assert!(error.contains("--help"));
     }
 
@@ -111,7 +111,7 @@ mod tests {
         assert_eq!(code, EXIT_USAGE);
         assert!(stdout.is_empty());
         assert!(help.contains(javaup_core::PRODUCT_DESCRIPTION));
-        assert!(help.contains("Usage: javaup <COMMAND>"));
+        assert!(help.contains("Usage: jup <COMMAND>"));
         assert!(help.contains("init"));
         assert!(help.contains("build"));
         assert!(help.contains("version"));
@@ -127,7 +127,7 @@ mod tests {
         let help = String::from_utf8(stdout).unwrap();
 
         assert_eq!(code, EXIT_SUCCESS);
-        assert!(help.contains("Usage: javaup <COMMAND>"));
+        assert!(help.contains("Usage: jup <COMMAND>"));
         assert!(help.contains("init"));
         assert!(help.contains("build"));
         assert!(help.contains("version"));
@@ -146,11 +146,7 @@ mod tests {
         assert_eq!(code, EXIT_SUCCESS);
         assert_eq!(
             version,
-            format!(
-                "{} {}\n",
-                javaup_core::PRODUCT_NAME,
-                env!("JAVAUP_CLI_VERSION")
-            )
+            format!("{} {}\n", "jup", env!("JAVAUP_CLI_VERSION"))
         );
         assert!(stderr.is_empty());
     }

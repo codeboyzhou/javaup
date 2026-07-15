@@ -3,10 +3,12 @@ use std::iter;
 
 use clap::{Args, Parser, Subcommand};
 
+const CLI_NAME: &str = "jup";
+
 /// Command-line interface for managing Java installations.
 #[derive(Debug, Parser)]
 #[command(
-    name = javaup_core::PRODUCT_NAME,
+    name = CLI_NAME,
     version = env!("JAVAUP_CLI_VERSION"),
     about = javaup_core::PRODUCT_DESCRIPTION,
     arg_required_else_help = true
@@ -23,8 +25,7 @@ impl Cli {
         S: Into<OsString>,
     {
         Self::try_parse_from(
-            iter::once(OsString::from(javaup_core::PRODUCT_NAME))
-                .chain(args.into_iter().map(Into::into)),
+            iter::once(OsString::from(CLI_NAME)).chain(args.into_iter().map(Into::into)),
         )
     }
 }
@@ -33,7 +34,7 @@ impl Cli {
 pub(crate) enum Command {
     /// Detect the current Maven project and record its required environment.
     Init,
-    /// Build the project with the JDK recorded by `javaup init`.
+    /// Build the project with the JDK recorded by `jup init`.
     Build(BuildArgs),
     /// Print version, platform and build information.
     Version,
@@ -80,7 +81,7 @@ mod tests {
         for argument in ["-h", "--help"] {
             let error = Cli::parse([argument]).unwrap_err();
             assert_eq!(error.kind(), ErrorKind::DisplayHelp);
-            assert!(error.to_string().contains("Usage: javaup <COMMAND>"));
+            assert!(error.to_string().contains("Usage: jup <COMMAND>"));
         }
 
         let error = Cli::parse(std::iter::empty::<&str>()).unwrap_err();
@@ -88,7 +89,7 @@ mod tests {
             error.kind(),
             ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
         );
-        assert!(error.to_string().contains("Usage: javaup <COMMAND>"));
+        assert!(error.to_string().contains("Usage: jup <COMMAND>"));
     }
 
     #[test]
@@ -98,11 +99,7 @@ mod tests {
             assert_eq!(error.kind(), ErrorKind::DisplayVersion);
             assert_eq!(
                 error.to_string(),
-                format!(
-                    "{} {}\n",
-                    javaup_core::PRODUCT_NAME,
-                    env!("JAVAUP_CLI_VERSION")
-                )
+                format!("{} {}\n", CLI_NAME, env!("JAVAUP_CLI_VERSION"))
             );
         }
     }
@@ -114,6 +111,6 @@ mod tests {
 
         let error = Cli::parse(["version", "extra"]).unwrap_err();
         assert_eq!(error.kind(), ErrorKind::UnknownArgument);
-        assert!(error.to_string().contains("Usage: javaup version"));
+        assert!(error.to_string().contains("Usage: jup version"));
     }
 }
