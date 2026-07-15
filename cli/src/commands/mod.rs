@@ -2,6 +2,7 @@ use std::io::{self, Write};
 use std::process::ExitStatus;
 
 use crate::cli::Command;
+use crate::output::Output;
 
 mod build;
 mod init;
@@ -25,15 +26,19 @@ impl CommandOutcome {
     }
 }
 
-pub(crate) fn execute<W>(command: Command, stdout: &mut W) -> io::Result<CommandOutcome>
+pub(crate) fn execute<Stdout, Stderr>(
+    command: Command,
+    output: &mut Output<'_, Stdout, Stderr>,
+) -> io::Result<CommandOutcome>
 where
-    W: Write,
+    Stdout: Write,
+    Stderr: Write,
 {
     match command {
-        Command::Init => init::execute(stdout).map(|_| CommandOutcome::Success),
+        Command::Init => init::execute(output).map(|_| CommandOutcome::Success),
         Command::Build(arguments) => {
-            build::execute(arguments.maven_arguments, stdout).map(CommandOutcome::Process)
+            build::execute(arguments.maven_arguments, output.stdout()).map(CommandOutcome::Process)
         }
-        Command::Version => version::execute(stdout).map(|_| CommandOutcome::Success),
+        Command::Version => version::execute(output.stdout()).map(|_| CommandOutcome::Success),
     }
 }

@@ -3,6 +3,7 @@ use std::io::Write;
 
 use crate::cli::Cli;
 use crate::commands;
+use crate::output::{Output, OutputOptions};
 
 const EXIT_SUCCESS: u8 = 0;
 const EXIT_FAILURE: u8 = 1;
@@ -11,6 +12,22 @@ const EXIT_USAGE: u8 = 2;
 /// Parses CLI arguments, dispatches the selected command and translates the
 /// result into a process exit code.
 pub fn run<I, S, Stdout, Stderr>(args: I, stdout: &mut Stdout, stderr: &mut Stderr) -> u8
+where
+    I: IntoIterator<Item = S>,
+    S: Into<OsString>,
+    Stdout: Write,
+    Stderr: Write,
+{
+    run_with_options(args, stdout, stderr, OutputOptions::default())
+}
+
+/// Runs the CLI with explicit presentation options.
+pub fn run_with_options<I, S, Stdout, Stderr>(
+    args: I,
+    stdout: &mut Stdout,
+    stderr: &mut Stderr,
+    output_options: OutputOptions,
+) -> u8
 where
     I: IntoIterator<Item = S>,
     S: Into<OsString>,
@@ -30,10 +47,11 @@ where
         }
     };
 
-    match commands::execute(cli.command, stdout) {
+    let mut output = Output::new(stdout, stderr, output_options);
+    match commands::execute(cli.command, &mut output) {
         Ok(outcome) => outcome.exit_code(),
         Err(error) => {
-            let _ = writeln!(stderr, "error: {error}");
+            let _ = output.error(error);
             EXIT_FAILURE
         }
     }

@@ -12,6 +12,22 @@ pub use build::ProjectBuildError;
 pub use config::ProjectConfigError;
 pub use detection::ProjectDetectionError;
 
+/// A meaningful milestone emitted while detecting a project environment.
+///
+/// Consumers can use these events to provide progress feedback without
+/// coupling the core detection logic to a particular user interface.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum ProjectDetectionEvent {
+    InspectingProject { project_dir: PathBuf },
+    ReadingJavaRequirements { pom_path: PathBuf },
+    SearchingForJdk { major_version: u32 },
+    JdkDetected { major_version: u32, home: PathBuf },
+    ReadingMavenWrapper { properties_path: PathBuf },
+    MavenWrapperUnavailable,
+    MavenDetected { version: String, uses_wrapper: bool },
+}
+
 /// Build system used by a detected project.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
@@ -55,7 +71,21 @@ pub struct ProjectEnvironment {
 impl ProjectEnvironment {
     /// Detects the build environment required by the project at `project_dir`.
     pub fn detect(project_dir: impl AsRef<Path>) -> Result<Self, ProjectDetectionError> {
-        detection::detect(project_dir.as_ref())
+        Self::detect_with_observer(project_dir, |_| {})
+    }
+
+    /// Detects the project environment and reports meaningful milestones.
+    ///
+    /// The observer is deliberately best-effort: it cannot alter detection or
+    /// replace a domain error with a presentation-layer error.
+    pub fn detect_with_observer<F>(
+        project_dir: impl AsRef<Path>,
+        mut observer: F,
+    ) -> Result<Self, ProjectDetectionError>
+    where
+        F: FnMut(ProjectDetectionEvent),
+    {
+        detection::detect(project_dir.as_ref(), &mut observer)
     }
 
     /// Loads a previously saved environment for `project_dir`.

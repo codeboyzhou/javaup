@@ -6,7 +6,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 
-use super::{MavenEnvironment, ProjectEnvironment, ProjectType, is_maven_version};
+use super::{
+    MavenEnvironment, ProjectDetectionEvent, ProjectEnvironment, ProjectType, is_maven_version,
+};
 use crate::java::{JdkDiscoveryError, JdkInstallation, parse_java_major};
 
 const POM_FILE_NAME: &str = "pom.xml";
@@ -100,7 +102,17 @@ impl Error for ProjectDetectionError {
     }
 }
 
-pub(super) fn detect(project_dir: &Path) -> Result<ProjectEnvironment, ProjectDetectionError> {
+pub(super) fn detect<F>(
+    project_dir: &Path,
+    observer: &mut F,
+) -> Result<ProjectEnvironment, ProjectDetectionError>
+where
+    F: FnMut(ProjectDetectionEvent),
+{
+    observer(ProjectDetectionEvent::InspectingProject {
+        project_dir: project_dir.to_owned(),
+    });
+
     let pom_path = project_dir.join(POM_FILE_NAME);
     if !pom_path.is_file() {
         return Err(ProjectDetectionError::NotMavenProject {
@@ -108,14 +120,24 @@ pub(super) fn detect(project_dir: &Path) -> Result<ProjectEnvironment, ProjectDe
         });
     }
 
+    observer(ProjectDetectionEvent::ReadingJavaRequirements {
+        pom_path: pom_path.clone(),
+    });
     let java_version = detect_java_version(&pom_path)?;
+    observer(ProjectDetectionEvent::SearchingForJdk {
+        major_version: java_version,
+    });
     let java = JdkInstallation::discover(java_version).map_err(|source| {
         ProjectDetectionError::JdkDiscovery {
             major_version: java_version,
             source,
         }
     })?;
-    let maven = detect_maven(project_dir)?;
+    observer(ProjectDetectionEvent::JdkDetected {
+        major_version: java.major_version(),
+        home: java.home().to_owned(),
+    });
+    let maven = detect_maven(project_dir, observer)?;
     Ok(ProjectEnvironment {
         project_type: ProjectType::Maven,
         java,
@@ -123,21 +145,35 @@ pub(super) fn detect(project_dir: &Path) -> Result<ProjectEnvironment, ProjectDe
     })
 }
 
-fn detect_maven(project_dir: &Path) -> Result<MavenEnvironment, ProjectDetectionError> {
+fn detect_maven<F>(
+    project_dir: &Path,
+    observer: &mut F,
+) -> Result<MavenEnvironment, ProjectDetectionError>
+where
+    F: FnMut(ProjectDetectionEvent),
+{
     let wrapper_properties = project_dir.join(".mvn/wrapper/maven-wrapper.properties");
     if wrapper_properties.is_file() {
+        observer(ProjectDetectionEvent::ReadingMavenWrapper {
+            properties_path: wrapper_properties.clone(),
+        });
         let contents = read_to_string(&wrapper_properties)?;
         let version = parse_wrapper_maven_version(&contents).ok_or({
             ProjectDetectionError::MavenWrapperVersionNotFound {
                 properties_path: wrapper_properties,
             }
         })?;
+        observer(ProjectDetectionEvent::MavenDetected {
+            version: version.clone(),
+            uses_wrapper: true,
+        });
         return Ok(MavenEnvironment {
             version,
             uses_wrapper: true,
         });
     }
 
+    observer(ProjectDetectionEvent::MavenWrapperUnavailable);
     let output = run_maven_version(project_dir)
         .map_err(|source| ProjectDetectionError::MavenCommandUnavailable { source })?;
     if !output.status.success() {
@@ -153,6 +189,10 @@ fn detect_maven(project_dir: &Path) -> Result<MavenEnvironment, ProjectDetection
     );
     let version =
         parse_maven_version_output(&combined).ok_or(ProjectDetectionError::MavenVersionNotFound)?;
+    observer(ProjectDetectionEvent::MavenDetected {
+        version: version.clone(),
+        uses_wrapper: false,
+    });
     Ok(MavenEnvironment {
         version,
         uses_wrapper: false,
@@ -548,9 +588,24 @@ mod tests {
             detect_java_version(&directory.path().join(POM_FILE_NAME)).unwrap(),
             8
         );
-        let maven = detect_maven(directory.path()).unwrap();
+        let mut events = Vec::new();
+        let maven = detect_maven(directory.path(), &mut |event| events.push(event)).unwrap();
         assert_eq!(maven.version(), "3.9.9");
         assert!(maven.uses_wrapper());
+        assert_eq!(
+            events,
+            vec![
+                ProjectDetectionEvent::ReadingMavenWrapper {
+                    properties_path: directory
+                        .path()
+                        .join(".mvn/wrapper/maven-wrapper.properties"),
+                },
+                ProjectDetectionEvent::MavenDetected {
+                    version: "3.9.9".to_owned(),
+                    uses_wrapper: true,
+                },
+            ]
+        );
     }
 
     #[test]

@@ -2,5 +2,7 @@ mod application;
 mod build_info;
 mod cli;
 mod commands;
+mod output;
 
-pub use application::run;
+pub use application::{run, run_with_options};
+pub use output::OutputOptions;
