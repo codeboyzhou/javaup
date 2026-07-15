@@ -112,3 +112,61 @@ fn init_reports_failures_after_the_last_started_stage() {
     assert!(lines[1].starts_with("[ERROR] "));
     assert!(lines[1].contains("is not a Maven project"));
 }
+
+#[test]
+fn status_reports_the_nearest_initialized_project() {
+    let fixture = tempfile::tempdir().unwrap();
+    let project = fixture.path().join("project");
+    let child = project.join("module").join("src");
+    let java_home = fixture.path().join("jdk-21");
+    let javaup_home = fixture.path().join("javaup-home");
+    fs::create_dir_all(project.join(".mvn/wrapper")).unwrap();
+    fs::create_dir_all(&child).unwrap();
+    fs::write(
+        project.join("pom.xml"),
+        "<project><properties><java.version>21</java.version></properties></project>",
+    )
+    .unwrap();
+    fs::write(
+        project.join(".mvn/wrapper/maven-wrapper.properties"),
+        "distributionUrl=https://example.test/apache-maven-3.9.9-bin.zip\n",
+    )
+    .unwrap();
+    write_fake_jdk(&java_home, 21);
+
+    let init = Command::new(env!("CARGO_BIN_EXE_jup"))
+        .arg("init")
+        .current_dir(&project)
+        .env("JAVAUP_JDK_21_HOME", &java_home)
+        .env("JAVAUP_HOME", &javaup_home)
+        .env("NO_COLOR", "1")
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+
+    let configuration_path = fs::read_dir(javaup_home.join("projects"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let result = Command::new(env!("CARGO_BIN_EXE_jup"))
+        .arg("status")
+        .current_dir(&child)
+        .env("JAVAUP_HOME", &javaup_home)
+        .env("NO_COLOR", "1")
+        .output()
+        .unwrap();
+
+    assert!(result.status.success());
+    assert!(result.stderr.is_empty());
+    assert_eq!(
+        String::from_utf8(result.stdout).unwrap(),
+        format!(
+            "Project: {}\nConfig: {}\nBuild system: maven\nMaven version: 3.9.9 (wrapper)\nJava version: 21.0.1\nJava home: {}\n",
+            project.display(),
+            configuration_path.display(),
+            java_home.display()
+        )
+    );
+}

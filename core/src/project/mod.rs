@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::java::JdkInstallation;
+use crate::java::{JdkInstallation, JdkValidationError};
 
 mod build;
 mod config;
@@ -98,6 +98,13 @@ impl ProjectEnvironment {
         config::load_nearest(start.as_ref())
     }
 
+    /// Returns the user-level configuration path for `project_dir`.
+    pub fn configuration_path(
+        project_dir: impl AsRef<Path>,
+    ) -> Result<PathBuf, ProjectConfigError> {
+        config::configuration_path(project_dir.as_ref())
+    }
+
     /// Saves this environment in javaup's user-level configuration directory.
     pub fn save(&self, project_dir: impl AsRef<Path>) -> Result<PathBuf, ProjectConfigError> {
         config::save(project_dir.as_ref(), self)
@@ -109,6 +116,11 @@ impl ProjectEnvironment {
 
     pub fn java_version(&self) -> u32 {
         self.java.major_version()
+    }
+
+    /// Re-validates the recorded JDK and returns its full installed version.
+    pub fn installed_java_version(&self) -> Result<String, JdkValidationError> {
+        self.java.version()
     }
 
     pub fn java_home(&self) -> &Path {

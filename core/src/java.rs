@@ -47,6 +47,11 @@ impl JdkInstallation {
         inspect_home(self.home.clone(), self.major_version).map(|_| ())
     }
 
+    /// Returns the full version reported by the installed JDK.
+    pub fn version(&self) -> Result<String, JdkValidationError> {
+        inspect_home_with_version(self.home.clone(), self.major_version).map(|(_, version)| version)
+    }
+
     pub fn major_version(&self) -> u32 {
         self.major_version
     }
@@ -202,6 +207,13 @@ impl Error for JdkValidationError {
 }
 
 fn inspect_home(home: PathBuf, expected_major: u32) -> Result<JdkInstallation, JdkValidationError> {
+    inspect_home_with_version(home, expected_major).map(|(installation, _)| installation)
+}
+
+fn inspect_home_with_version(
+    home: PathBuf,
+    expected_major: u32,
+) -> Result<(JdkInstallation, String), JdkValidationError> {
     if !home.is_absolute() {
         return Err(JdkValidationError::HomeNotAbsolute { home });
     }
@@ -219,11 +231,13 @@ fn inspect_home(home: PathBuf, expected_major: u32) -> Result<JdkInstallation, J
         return Err(JdkValidationError::CompilerNotFound { path: compiler });
     }
 
-    let major_version = match version_from_release_file(&home) {
+    let version = match version_from_release_file(&home) {
         Some(version) => Some(version),
         None => version_from_command(&java)?,
     }
     .ok_or_else(|| JdkValidationError::VersionNotFound { home: home.clone() })?;
+    let major_version = parse_java_major(&version)
+        .ok_or_else(|| JdkValidationError::VersionNotFound { home: home.clone() })?;
 
     if major_version != expected_major {
         return Err(JdkValidationError::VersionMismatch {
@@ -233,23 +247,26 @@ fn inspect_home(home: PathBuf, expected_major: u32) -> Result<JdkInstallation, J
         });
     }
 
-    Ok(JdkInstallation {
-        major_version,
-        home,
-    })
+    Ok((
+        JdkInstallation {
+            major_version,
+            home,
+        },
+        version,
+    ))
 }
 
-fn version_from_release_file(home: &Path) -> Option<u32> {
+fn version_from_release_file(home: &Path) -> Option<String> {
     let contents = fs::read_to_string(home.join("release")).ok()?;
     contents.lines().find_map(|line| {
         let (key, value) = line.split_once('=')?;
-        (key.trim() == "JAVA_VERSION")
-            .then(|| value.trim().trim_matches(['\"', '\'']))
-            .and_then(parse_java_major)
+        let version = value.trim().trim_matches(['\"', '\'']);
+        (key.trim() == "JAVA_VERSION" && parse_java_major(version).is_some())
+            .then(|| version.to_owned())
     })
 }
 
-fn version_from_command(java: &Path) -> Result<Option<u32>, JdkValidationError> {
+fn version_from_command(java: &Path) -> Result<Option<String>, JdkValidationError> {
     let output = Command::new(java)
         .arg("-version")
         .output()
@@ -272,7 +289,7 @@ fn version_from_command(java: &Path) -> Result<Option<u32>, JdkValidationError> 
     Ok(parse_java_version_output(&combined))
 }
 
-fn parse_java_version_output(output: &str) -> Option<u32> {
+fn parse_java_version_output(output: &str) -> Option<String> {
     output.lines().find_map(|line| {
         let (_, version) = line.split_once("version")?;
         let version = version.trim();
@@ -280,7 +297,7 @@ fn parse_java_version_output(output: &str) -> Option<u32> {
             .strip_prefix('\"')
             .and_then(|value| value.split_once('\"').map(|(value, _)| value))
             .unwrap_or_else(|| version.split_whitespace().next().unwrap_or(version));
-        parse_java_major(version)
+        parse_java_major(version).map(|_| version.to_owned())
     })
 }
 
@@ -482,7 +499,7 @@ mod tests {
         assert_eq!(parse_java_major("invalid"), None);
         assert_eq!(
             parse_java_version_output("openjdk version \"17.0.12\" 2024-07-16"),
-            Some(17)
+            Some("17.0.12".to_owned())
         );
     }
 
@@ -493,6 +510,7 @@ mod tests {
 
         assert_eq!(installation.major_version(), 8);
         assert_eq!(installation.home(), directory.path());
+        assert_eq!(installation.version().unwrap(), "1.8.0_442");
     }
 
     #[test]

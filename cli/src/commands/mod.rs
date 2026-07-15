@@ -6,6 +6,7 @@ use crate::output::Output;
 
 mod build;
 mod init;
+mod status;
 mod version;
 
 pub(crate) enum CommandOutcome {
@@ -39,6 +40,7 @@ where
         Command::Build(arguments) => {
             build::execute(arguments.maven_arguments, output.stdout()).map(CommandOutcome::Process)
         }
+        Command::Status => status::execute(output).map(|_| CommandOutcome::Success),
         Command::Version => version::execute(output.stdout()).map(|_| CommandOutcome::Success),
     }
 }

@@ -114,6 +114,7 @@ mod tests {
         assert!(help.contains("Usage: jup <COMMAND>"));
         assert!(help.contains("init"));
         assert!(help.contains("build"));
+        assert!(help.contains("status"));
         assert!(help.contains("version"));
         assert!(help.contains("--help"));
     }
@@ -130,6 +131,7 @@ mod tests {
         assert!(help.contains("Usage: jup <COMMAND>"));
         assert!(help.contains("init"));
         assert!(help.contains("build"));
+        assert!(help.contains("status"));
         assert!(help.contains("version"));
         assert!(help.contains("--help"));
         assert!(stderr.is_empty());

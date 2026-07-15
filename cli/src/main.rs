@@ -1,7 +1,7 @@
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    let stdout = std::io::stdout();
+    let stdout = anstream::AutoStream::new(std::io::stdout(), anstream::ColorChoice::Auto);
     let stderr = anstream::AutoStream::new(std::io::stderr(), anstream::ColorChoice::Auto);
     let mut stdout = stdout.lock();
     let mut stderr = stderr.lock();
@@ -10,7 +10,7 @@ fn main() -> ExitCode {
         std::env::args_os().skip(1),
         &mut stdout,
         &mut stderr,
-        cli::OutputOptions::colored(),
+        cli::OutputOptions::styled(),
     );
     ExitCode::from(code)
 }

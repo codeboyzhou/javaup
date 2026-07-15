@@ -211,6 +211,10 @@ pub(super) fn load_nearest(
     load_nearest_in(&storage_directory()?, start)
 }
 
+pub(super) fn configuration_path(project_dir: &Path) -> Result<PathBuf, ProjectConfigError> {
+    environment_path(&storage_directory()?, project_dir)
+}
+
 fn load_nearest_in(
     storage_directory: &Path,
     start: &Path,

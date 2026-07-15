@@ -2,22 +2,26 @@ use std::fmt;
 use std::io::{self, Write};
 
 const ANSI_RESET: &str = "\u{1b}[0m";
+const ANSI_BOLD: &str = "\u{1b}[1m";
 const ANSI_CYAN: &str = "\u{1b}[36m";
 const ANSI_GREEN: &str = "\u{1b}[32m";
 const ANSI_YELLOW: &str = "\u{1b}[33m";
 const ANSI_RED: &str = "\u{1b}[31m";
 
-/// Controls presentation details for CLI status messages.
+/// Controls presentation details for CLI output.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct OutputOptions {
-    status_color: bool,
+    styles_enabled: bool,
 }
 
 impl OutputOptions {
-    /// Emits colored status labels. The destination stream is responsible for
-    /// adapting or stripping ANSI styles according to terminal capabilities.
-    pub fn colored() -> Self {
-        Self { status_color: true }
+    /// Emits styled field and status labels. The destination stream is
+    /// responsible for adapting or stripping ANSI styles according to terminal
+    /// capabilities.
+    pub fn styled() -> Self {
+        Self {
+            styles_enabled: true,
+        }
     }
 }
 
@@ -50,10 +54,19 @@ where
         self.stdout
     }
 
+    pub(crate) fn field(&mut self, label: &str, value: impl fmt::Display) -> io::Result<()> {
+        if self.options.styles_enabled {
+            write!(self.stdout, "{ANSI_BOLD}{label}:{ANSI_RESET}")?;
+        } else {
+            write!(self.stdout, "{label}:")?;
+        }
+        writeln!(self.stdout, " {value}")
+    }
+
     pub(crate) fn info(&mut self, message: impl fmt::Display) -> io::Result<()> {
         write_status(
             self.stderr,
-            self.options.status_color,
+            self.options.styles_enabled,
             "INFO",
             ANSI_CYAN,
             message,
@@ -63,7 +76,7 @@ where
     pub(crate) fn success(&mut self, message: impl fmt::Display) -> io::Result<()> {
         write_status(
             self.stderr,
-            self.options.status_color,
+            self.options.styles_enabled,
             "SUCCESS",
             ANSI_GREEN,
             message,
@@ -73,7 +86,7 @@ where
     pub(crate) fn warning(&mut self, message: impl fmt::Display) -> io::Result<()> {
         write_status(
             self.stderr,
-            self.options.status_color,
+            self.options.styles_enabled,
             "WARNING",
             ANSI_YELLOW,
             message,
@@ -83,7 +96,7 @@ where
     pub(crate) fn error(&mut self, message: impl fmt::Display) -> io::Result<()> {
         write_status(
             self.stderr,
-            self.options.status_color,
+            self.options.styles_enabled,
             "ERROR",
             ANSI_RED,
             message,
@@ -132,7 +145,7 @@ mod tests {
     fn colors_only_status_labels() {
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
-        let mut output = Output::new(&mut stdout, &mut stderr, OutputOptions::colored());
+        let mut output = Output::new(&mut stdout, &mut stderr, OutputOptions::styled());
 
         output.success("done").unwrap();
         output.warning("fallback").unwrap();
@@ -142,5 +155,35 @@ mod tests {
             String::from_utf8(stderr).unwrap(),
             "\u{1b}[32m[SUCCESS]\u{1b}[0m done\n\u{1b}[33m[WARNING]\u{1b}[0m fallback\n\u{1b}[31m[ERROR]\u{1b}[0m failed\n"
         );
+    }
+
+    #[test]
+    fn emphasizes_field_labels_when_styled() {
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let mut output = Output::new(&mut stdout, &mut stderr, OutputOptions::styled());
+
+        output.field("Java version", "17.0.12").unwrap();
+
+        assert_eq!(
+            String::from_utf8(stdout).unwrap(),
+            "\u{1b}[1mJava version:\u{1b}[0m 17.0.12\n"
+        );
+        assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn writes_plain_field_labels_without_styles() {
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let mut output = Output::new(&mut stdout, &mut stderr, OutputOptions::default());
+
+        output.field("Java version", "17.0.12").unwrap();
+
+        assert_eq!(
+            String::from_utf8(stdout).unwrap(),
+            "Java version: 17.0.12\n"
+        );
+        assert!(stderr.is_empty());
     }
 }

@@ -36,6 +36,8 @@ pub(crate) enum Command {
     Init,
     /// Build the project with the JDK recorded by `jup init`.
     Build(BuildArgs),
+    /// Show the environment recorded for the current project.
+    Status,
     /// Print version, platform and build information.
     Version,
 }
@@ -63,6 +65,12 @@ mod tests {
     fn parses_version_subcommand() {
         let cli = Cli::parse(["version"]).unwrap();
         assert_eq!(cli.command, Command::Version);
+    }
+
+    #[test]
+    fn parses_status_subcommand() {
+        let cli = Cli::parse(["status"]).unwrap();
+        assert_eq!(cli.command, Command::Status);
     }
 
     #[test]
