@@ -6,8 +6,17 @@ default-members = ["cli"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.89"
 license = "Apache-2.0"
 publish = false
 
 [workspace.dependencies]
 javaup_core = { package = "javaup-core", path = "core" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"

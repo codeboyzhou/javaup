@@ -1,6 +1,7 @@
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Utc};
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=JAVAUP_BUILD_DATE");
     println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
 
     let build_date = build_date();
@@ -13,10 +14,15 @@ fn main() {
 }
 
 fn build_date() -> String {
-    std::env::var("SOURCE_DATE_EPOCH")
+    std::env::var("JAVAUP_BUILD_DATE")
         .ok()
-        .and_then(|value| value.parse::<i64>().ok())
-        .and_then(|timestamp| DateTime::<Utc>::from_timestamp(timestamp, 0))
-        .map(|date_time| date_time.format("%Y-%m-%d").to_string())
-        .unwrap_or_else(|| Local::now().format("%Y-%m-%d").to_string())
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            std::env::var("SOURCE_DATE_EPOCH")
+                .ok()
+                .and_then(|value| value.parse::<i64>().ok())
+                .and_then(|timestamp| DateTime::<Utc>::from_timestamp(timestamp, 0))
+                .map(|date_time| date_time.format("%Y-%m-%d").to_string())
+        })
+        .unwrap_or_else(|| "unknown".to_owned())
 }

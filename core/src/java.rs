@@ -509,7 +509,29 @@ fn executable_name(name: &str) -> OsString {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
+
+    proptest! {
+        #[test]
+        fn parses_generated_modern_java_versions(
+            major in 5_u32..100,
+            minor in any::<u16>(),
+            patch in any::<u16>(),
+        ) {
+            let version = format!("{major}.{minor}.{patch}");
+            prop_assert_eq!(parse_java_major(&version), Some(major));
+        }
+
+        #[test]
+        fn rejects_undelimited_java_version_suffixes(
+            major in 5_u32..100,
+            suffix in "[A-Za-z]{1,16}",
+        ) {
+            prop_assert_eq!(parse_java_major(&format!("{major}{suffix}")), None);
+        }
+    }
 
     fn fake_jdk(major_version: &str) -> tempfile::TempDir {
         let directory = tempfile::tempdir().unwrap();

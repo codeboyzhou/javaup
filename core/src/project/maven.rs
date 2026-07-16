@@ -177,7 +177,29 @@ mod tests {
     use std::cell::RefCell;
     use std::ffi::OsStr;
 
+    use proptest::prelude::*;
+
     use super::*;
+
+    proptest! {
+        #[test]
+        fn extracts_generated_maven_versions(
+            major in 1_u16..100,
+            minor in 0_u16..100,
+            patch in 0_u16..100,
+            qualifier in prop::option::of("[a-z][a-z0-9]{0,8}"),
+        ) {
+            let qualifier = qualifier.map_or_else(String::new, |value| format!("-{value}"));
+            let version = format!("{major}.{minor}.{patch}{qualifier}");
+            let properties = format!(
+                "distributionUrl=https\\://repo.example/apache-maven-{version}-bin.zip"
+            );
+            let output = format!("Apache Maven {version}\n");
+
+            prop_assert_eq!(parse_wrapper_maven_version(&properties), Some(version.clone()));
+            prop_assert_eq!(parse_maven_version_output(&output), Some(version));
+        }
+    }
 
     struct RecordingRunner {
         invocations: RefCell<Vec<ProcessInvocation>>,

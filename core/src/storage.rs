@@ -201,7 +201,36 @@ mod tests {
     use std::sync::mpsc;
     use std::time::Duration;
 
+    use proptest::prelude::*;
+
     use super::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn hex_encoding_round_trips_arbitrary_bytes(bytes in prop::collection::vec(any::<u8>(), 0..512)) {
+            prop_assert_eq!(decode_hex(&encode_hex(&bytes)), Some(bytes));
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn path_encoding_round_trips_arbitrary_unix_bytes(bytes in prop::collection::vec(any::<u8>(), 0..256)) {
+            use std::os::unix::ffi::OsStringExt;
+
+            let path = PathBuf::from(OsString::from_vec(bytes));
+            prop_assert_eq!(decode_path(&encode_path(&path)), Some(path));
+        }
+
+        #[cfg(windows)]
+        #[test]
+        fn path_encoding_round_trips_arbitrary_windows_units(units in prop::collection::vec(any::<u16>(), 0..256)) {
+            use std::os::windows::ffi::OsStringExt;
+
+            let path = PathBuf::from(OsString::from_wide(&units));
+            prop_assert_eq!(decode_path(&encode_path(&path)), Some(path));
+        }
+    }
 
     #[test]
     fn round_trips_native_paths() {
