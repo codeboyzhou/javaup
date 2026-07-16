@@ -90,7 +90,12 @@ fn init_reports_each_stage_and_saves_the_environment() {
     let saved_files = fs::read_dir(javaup_home.join("projects"))
         .unwrap()
         .collect::<Result<Vec<_>, _>>()
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .filter(|entry| {
+            entry.path().extension().and_then(|value| value.to_str()) == Some("properties")
+        })
+        .collect::<Vec<_>>();
     assert_eq!(saved_files.len(), 1);
     let saved = fs::read_to_string(saved_files[0].path()).unwrap();
     assert!(saved.contains("java.version=17\n"));
@@ -158,8 +163,10 @@ fn status_reports_the_nearest_initialized_project() {
 
     let configuration_path = fs::read_dir(javaup_home.join("projects"))
         .unwrap()
-        .next()
-        .unwrap()
+        .filter_map(Result::ok)
+        .find(|entry| {
+            entry.path().extension().and_then(|value| value.to_str()) == Some("properties")
+        })
         .unwrap()
         .path();
     let result = Command::new(env!("CARGO_BIN_EXE_jup"))

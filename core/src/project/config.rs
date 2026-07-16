@@ -14,6 +14,12 @@ use crate::storage;
 
 const PROJECTS_DIRECTORY_NAME: &str = "projects";
 const ENVIRONMENT_FILE_EXTENSION: &str = "properties";
+const SCHEMA_VERSION_KEY: &str = "schema.version";
+const CURRENT_SCHEMA_VERSION: &str = "1";
+const PROJECT_PATH_KEY: &str = "project.path";
+const PROJECT_PATH_HEX_KEY: &str = "project.path.hex";
+const JAVA_HOME_KEY: &str = "java.home";
+const JAVA_HOME_HEX_KEY: &str = "java.home.hex";
 const MAVEN_SETTINGS_KEY: &str = "maven.settings";
 
 /// Error raised while loading or saving a project environment.
@@ -76,7 +82,7 @@ impl fmt::Display for ProjectConfigError {
             ),
             Self::StorageDirectoryUnavailable => write!(
                 formatter,
-                "could not determine the javaup storage directory; set JAVAUP_HOME"
+                "could not determine the javaup storage directory; set JAVAUP_HOME to an absolute path"
             ),
             Self::InvalidLine { path, line } => write!(
                 formatter,
@@ -130,13 +136,17 @@ fn save_preserving_maven_settings_in(
     environment: &ProjectEnvironment,
 ) -> Result<PathBuf, ProjectConfigError> {
     let path = environment_path(storage_directory, project_dir)?;
-    let existing_profile = path
-        .is_file()
-        .then(|| load_path(&path).ok())
-        .flatten()
-        .and_then(|environment| environment.maven.settings_profile);
-    save_in_with_settings(
-        storage_directory,
+    let _lock = storage::exclusive_lock(&path).map_err(|source| ProjectConfigError::Write {
+        path: path.clone(),
+        source,
+    })?;
+    let existing_profile = if path.is_file() {
+        load_path(&path, Some(project_dir))?.maven.settings_profile
+    } else {
+        None
+    };
+    write_environment(
+        &path,
         project_dir,
         environment,
         environment
@@ -144,7 +154,8 @@ fn save_preserving_maven_settings_in(
             .settings_profile
             .as_deref()
             .or(existing_profile.as_deref()),
-    )
+    )?;
+    Ok(path)
 }
 
 fn save_in(
@@ -167,35 +178,44 @@ fn save_in_with_settings(
     settings_profile: Option<&str>,
 ) -> Result<PathBuf, ProjectConfigError> {
     let path = environment_path(storage_directory, project_dir)?;
-    let absolute_project_dir = std::path::absolute(project_dir).map_err(|source| {
-        ProjectConfigError::ResolveProjectPath {
+    let _lock = storage::exclusive_lock(&path).map_err(|source| ProjectConfigError::Write {
+        path: path.clone(),
+        source,
+    })?;
+    write_environment(&path, project_dir, environment, settings_profile)?;
+    Ok(path)
+}
+
+fn write_environment(
+    path: &Path,
+    project_dir: &Path,
+    environment: &ProjectEnvironment,
+    settings_profile: Option<&str>,
+) -> Result<(), ProjectConfigError> {
+    let absolute_project_dir =
+        fs::canonicalize(project_dir).map_err(|source| ProjectConfigError::ResolveProjectPath {
             path: project_dir.to_owned(),
             source,
-        }
-    })?;
+        })?;
     let mut contents = format!(
-        "project.path={}\nproject.type={}\njava.version={}\njava.home={}\nmaven.version={}\nmaven.wrapper={}\n",
-        absolute_project_dir.display(),
+        "{SCHEMA_VERSION_KEY}={CURRENT_SCHEMA_VERSION}\n{PROJECT_PATH_HEX_KEY}={}\nproject.type={}\njava.version={}\n{JAVA_HOME_HEX_KEY}={}\nmaven.version={}\nmaven.wrapper={}\n",
+        storage::encode_path(&absolute_project_dir),
         environment.project_type.as_str(),
         environment.java.major_version(),
-        environment.java.home().display(),
+        storage::encode_path(environment.java.home()),
         environment.maven.version,
         environment.maven.uses_wrapper
     );
     if let Some(settings_profile) = settings_profile {
         contents.push_str(&format!("{MAVEN_SETTINGS_KEY}={settings_profile}\n"));
     }
-    fs::create_dir_all(path.parent().expect("environment path must have a parent")).map_err(
-        |source| ProjectConfigError::Write {
-            path: path.clone(),
+    storage::atomic_write(path, contents.as_bytes()).map_err(|source| {
+        ProjectConfigError::Write {
+            path: path.to_owned(),
             source,
-        },
-    )?;
-    fs::write(&path, contents).map_err(|source| ProjectConfigError::Write {
-        path: path.clone(),
-        source,
+        }
     })?;
-    Ok(path)
+    Ok(())
 }
 
 pub(super) fn load(project_dir: &Path) -> Result<ProjectEnvironment, ProjectConfigError> {
@@ -207,15 +227,72 @@ fn load_in(
     project_dir: &Path,
 ) -> Result<ProjectEnvironment, ProjectConfigError> {
     let path = environment_path(storage_directory, project_dir)?;
-    load_path(&path)
+    load_path(&path, Some(project_dir))
 }
 
-fn load_path(path: &Path) -> Result<ProjectEnvironment, ProjectConfigError> {
+fn load_path(
+    path: &Path,
+    expected_project_dir: Option<&Path>,
+) -> Result<ProjectEnvironment, ProjectConfigError> {
     let contents = fs::read_to_string(path).map_err(|source| ProjectConfigError::Read {
         path: path.to_owned(),
         source,
     })?;
     let values = parse_entries(path, &contents)?;
+
+    let schema_version = values
+        .get(SCHEMA_VERSION_KEY)
+        .map(String::as_str)
+        .unwrap_or("0");
+    if !matches!(schema_version, "0" | CURRENT_SCHEMA_VERSION) {
+        return Err(invalid_value(path, SCHEMA_VERSION_KEY, schema_version));
+    }
+
+    let project_path = read_path(
+        path,
+        &values,
+        schema_version,
+        PROJECT_PATH_KEY,
+        PROJECT_PATH_HEX_KEY,
+    )?;
+    if !project_path.is_absolute() {
+        return Err(invalid_value(
+            path,
+            if schema_version == "0" {
+                PROJECT_PATH_KEY
+            } else {
+                PROJECT_PATH_HEX_KEY
+            },
+            "path is not absolute",
+        ));
+    }
+    if let Some(expected_project_dir) = expected_project_dir {
+        let expected_project_dir = fs::canonicalize(expected_project_dir).map_err(|source| {
+            ProjectConfigError::ResolveProjectPath {
+                path: expected_project_dir.to_owned(),
+                source,
+            }
+        })?;
+        let stored_project_dir = fs::canonicalize(&project_path).map_err(|source| {
+            ProjectConfigError::ResolveProjectPath {
+                path: project_path.clone(),
+                source,
+            }
+        })?;
+        if storage::path_identity(&stored_project_dir)
+            != storage::path_identity(&expected_project_dir)
+        {
+            return Err(invalid_value(
+                path,
+                if schema_version == "0" {
+                    PROJECT_PATH_KEY
+                } else {
+                    PROJECT_PATH_HEX_KEY
+                },
+                "path does not match the requested project",
+            ));
+        }
+    }
 
     let project_type = required(path, &values, "project.type")?;
     if project_type != "maven" {
@@ -229,10 +306,23 @@ fn load_path(path: &Path) -> Result<ProjectEnvironment, ProjectConfigError> {
         .filter(|version| *version >= 5)
         .ok_or_else(|| invalid_value(path, "java.version", java_value))?;
 
-    let java_home_value = required(path, &values, "java.home")?;
-    let java_home = PathBuf::from(java_home_value);
+    let java_home = read_path(
+        path,
+        &values,
+        schema_version,
+        JAVA_HOME_KEY,
+        JAVA_HOME_HEX_KEY,
+    )?;
     if !java_home.is_absolute() {
-        return Err(invalid_value(path, "java.home", java_home_value));
+        return Err(invalid_value(
+            path,
+            if schema_version == "0" {
+                JAVA_HOME_KEY
+            } else {
+                JAVA_HOME_HEX_KEY
+            },
+            "path is not absolute",
+        ));
     }
 
     let maven_version = required(path, &values, "maven.version")?;
@@ -283,7 +373,8 @@ fn load_nearest_in(
     for directory in start.ancestors() {
         let path = environment_path(storage_directory, directory)?;
         if path.is_file() {
-            return load_path(&path).map(|environment| (directory.to_owned(), environment));
+            return load_path(&path, Some(directory))
+                .map(|environment| (directory.to_owned(), environment));
         }
     }
 
@@ -301,8 +392,8 @@ fn environment_path(
             path: project_dir.to_owned(),
             source,
         })?;
-    let identity = project_identity(&canonical_project_dir);
-    let digest = Sha256::digest(identity.as_bytes());
+    let identity = storage::path_identity(&canonical_project_dir);
+    let digest = Sha256::digest(&identity);
     let project_key = encode_hex(&digest);
     Ok(storage_directory
         .join(PROJECTS_DIRECTORY_NAME)
@@ -318,16 +409,6 @@ fn encode_hex(bytes: &[u8]) -> String {
         encoded.push(HEX_DIGITS[(byte & 0x0f) as usize] as char);
     }
     encoded
-}
-
-#[cfg(windows)]
-fn project_identity(path: &Path) -> String {
-    path.to_string_lossy().to_lowercase()
-}
-
-#[cfg(not(windows))]
-fn project_identity(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
 }
 
 fn storage_directory() -> Result<PathBuf, ProjectConfigError> {
@@ -381,6 +462,20 @@ fn required<'a>(
             path: path.to_owned(),
             key,
         })
+}
+
+fn read_path(
+    registry_path: &Path,
+    values: &HashMap<String, String>,
+    schema_version: &str,
+    legacy_key: &'static str,
+    encoded_key: &'static str,
+) -> Result<PathBuf, ProjectConfigError> {
+    if schema_version == "0" {
+        return required(registry_path, values, legacy_key).map(PathBuf::from);
+    }
+    let value = required(registry_path, values, encoded_key)?;
+    storage::decode_path(value).ok_or_else(|| invalid_value(registry_path, encoded_key, value))
 }
 
 fn invalid_value(path: &Path, key: &'static str, value: &str) -> ProjectConfigError {
@@ -439,9 +534,9 @@ mod tests {
         assert_eq!(
             fs::read_to_string(path).unwrap(),
             format!(
-                "project.path={}\nproject.type=maven\njava.version=17\njava.home={}\nmaven.version=3.9.9\nmaven.wrapper=true\n",
-                project.path().display(),
-                project.path().join("jdk-17").display()
+                "schema.version=1\nproject.path.hex={}\nproject.type=maven\njava.version=17\njava.home.hex={}\nmaven.version=3.9.9\nmaven.wrapper=true\n",
+                storage::encode_path(&fs::canonicalize(project.path()).unwrap()),
+                storage::encode_path(&project.path().join("jdk-17"))
             )
         );
     }
@@ -454,7 +549,10 @@ mod tests {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(
             &path,
-            "project.type=maven\njava.version=abc\njava.home=/jdk\nmaven.version=3.9.9\nmaven.wrapper=false\n",
+            format!(
+                "project.path={}\nproject.type=maven\njava.version=abc\njava.home=/jdk\nmaven.version=3.9.9\nmaven.wrapper=false\n",
+                project.path().display()
+            ),
         )
         .unwrap();
 
@@ -465,6 +563,85 @@ mod tests {
                 key: "java.version",
                 ..
             }
+        ));
+    }
+
+    #[test]
+    fn reads_legacy_environments_and_rewrites_them_with_the_current_schema() {
+        let project = tempfile::tempdir().unwrap();
+        let storage_directory = tempfile::tempdir().unwrap();
+        let path = environment_path(storage_directory.path(), project.path()).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(
+            &path,
+            format!(
+                "project.path={}\nproject.type=maven\njava.version=17\njava.home={}\nmaven.version=3.9.9\nmaven.wrapper=true\n",
+                project.path().display(),
+                project.path().join("jdk-17").display()
+            ),
+        )
+        .unwrap();
+
+        let loaded = load_in(storage_directory.path(), project.path()).unwrap();
+        save_in(storage_directory.path(), project.path(), &loaded).unwrap();
+
+        let migrated = fs::read_to_string(path).unwrap();
+        assert!(migrated.starts_with("schema.version=1\n"));
+        assert!(migrated.contains("project.path.hex="));
+        assert!(migrated.contains("java.home.hex="));
+    }
+
+    #[test]
+    fn does_not_overwrite_a_corrupt_environment_while_preserving_settings() {
+        let project = tempfile::tempdir().unwrap();
+        let storage_directory = tempfile::tempdir().unwrap();
+        let path = environment_path(storage_directory.path(), project.path()).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "corrupt configuration\n").unwrap();
+
+        assert!(
+            save_preserving_maven_settings_in(
+                storage_directory.path(),
+                project.path(),
+                &environment(project.path(), 21),
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read_to_string(path).unwrap(), "corrupt configuration\n");
+    }
+
+    #[test]
+    fn rejects_unknown_schema_versions_and_mismatched_project_paths() {
+        let project = tempfile::tempdir().unwrap();
+        let other_project = tempfile::tempdir().unwrap();
+        let storage_directory = tempfile::tempdir().unwrap();
+        let path = environment_path(storage_directory.path(), project.path()).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "schema.version=99\n").unwrap();
+        assert!(matches!(
+            load_in(storage_directory.path(), project.path()),
+            Err(ProjectConfigError::InvalidValue {
+                key: SCHEMA_VERSION_KEY,
+                ..
+            })
+        ));
+
+        let environment = environment(project.path(), 17);
+        fs::write(
+            &path,
+            format!(
+                "schema.version=1\nproject.path.hex={}\nproject.type=maven\njava.version=17\njava.home.hex={}\nmaven.version=3.9.9\nmaven.wrapper=true\n",
+                storage::encode_path(&fs::canonicalize(other_project.path()).unwrap()),
+                storage::encode_path(environment.java.home()),
+            ),
+        )
+        .unwrap();
+        assert!(matches!(
+            load_in(storage_directory.path(), project.path()),
+            Err(ProjectConfigError::InvalidValue {
+                key: PROJECT_PATH_HEX_KEY,
+                ..
+            })
         ));
     }
 

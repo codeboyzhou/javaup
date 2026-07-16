@@ -9,7 +9,10 @@ use std::path::{Path, PathBuf};
 const MAVEN_DIRECTORY_NAME: &str = "maven";
 const SETTINGS_DIRECTORY_NAME: &str = "settings";
 const PROFILE_FILE_EXTENSION: &str = "properties";
+const SCHEMA_VERSION_KEY: &str = "schema.version";
+const CURRENT_SCHEMA_VERSION: &str = "1";
 const SETTINGS_PATH_KEY: &str = "path";
+const SETTINGS_PATH_HEX_KEY: &str = "path.hex";
 
 /// A named reference to a Maven `settings.xml` file.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -58,7 +61,6 @@ pub enum MavenSettingsError {
     InvalidName { name: String },
     ProfileNotFound { name: String },
     SettingsAccess { path: PathBuf, source: io::Error },
-    SettingsPathNotUnicode { path: PathBuf },
     InvalidSettings { path: PathBuf, message: String },
     RegistryRead { path: PathBuf, source: io::Error },
     RegistryWrite { path: PathBuf, source: io::Error },
@@ -83,11 +85,6 @@ impl fmt::Display for MavenSettingsError {
             Self::SettingsAccess { path, source } => write!(
                 formatter,
                 "could not access Maven settings file {}: {source}",
-                path.display()
-            ),
-            Self::SettingsPathNotUnicode { path } => write!(
-                formatter,
-                "Maven settings path {} is not valid Unicode",
                 path.display()
             ),
             Self::InvalidSettings { path, message } => write!(
@@ -117,7 +114,7 @@ impl fmt::Display for MavenSettingsError {
             ),
             Self::StorageDirectoryUnavailable => write!(
                 formatter,
-                "could not determine the javaup storage directory; set JAVAUP_HOME"
+                "could not determine the javaup storage directory; set JAVAUP_HOME to an absolute path"
             ),
         }
     }
@@ -161,35 +158,23 @@ fn register_in(
             source,
         })?;
     validate_settings_file(&settings_path)?;
-    let settings_path_value =
-        settings_path
-            .to_str()
-            .ok_or_else(|| MavenSettingsError::SettingsPathNotUnicode {
-                path: settings_path.clone(),
-            })?;
-    if settings_path_value.contains(['\r', '\n']) {
-        return Err(MavenSettingsError::InvalidSettings {
-            path: settings_path,
-            message: "path contains a line break".to_owned(),
-        });
-    }
-
     let registry_path = profile_path(storage_directory, name);
-    fs::create_dir_all(
-        registry_path
-            .parent()
-            .expect("profile path must have a parent"),
+    let _lock = crate::storage::exclusive_lock(&registry_path).map_err(|source| {
+        MavenSettingsError::RegistryWrite {
+            path: registry_path.clone(),
+            source,
+        }
+    })?;
+    crate::storage::atomic_write(
+        &registry_path,
+        format!(
+            "{SCHEMA_VERSION_KEY}={CURRENT_SCHEMA_VERSION}\n{SETTINGS_PATH_HEX_KEY}={}\n",
+            crate::storage::encode_path(&settings_path)
+        )
+        .as_bytes(),
     )
     .map_err(|source| MavenSettingsError::RegistryWrite {
         path: registry_path.clone(),
-        source,
-    })?;
-    fs::write(
-        &registry_path,
-        format!("{SETTINGS_PATH_KEY}={settings_path_value}\n"),
-    )
-    .map_err(|source| MavenSettingsError::RegistryWrite {
-        path: registry_path,
         source,
     })?;
 
@@ -251,8 +236,15 @@ fn remove_in(
     storage_directory: &Path,
     name: &str,
 ) -> Result<MavenSettingsProfile, MavenSettingsError> {
-    let profile = read_registration_in(storage_directory, name)?;
+    validate_name(name)?;
     let registry_path = profile_path(storage_directory, name);
+    let _lock = crate::storage::exclusive_lock(&registry_path).map_err(|source| {
+        MavenSettingsError::RegistryRemove {
+            path: registry_path.clone(),
+            source,
+        }
+    })?;
+    let profile = read_registration_path(name, &registry_path)?;
     fs::remove_file(&registry_path).map_err(|source| MavenSettingsError::RegistryRemove {
         path: registry_path,
         source,
@@ -266,17 +258,24 @@ fn read_registration_in(
 ) -> Result<MavenSettingsProfile, MavenSettingsError> {
     validate_name(name)?;
     let registry_path = profile_path(storage_directory, name);
+    read_registration_path(name, &registry_path)
+}
+
+fn read_registration_path(
+    name: &str,
+    registry_path: &Path,
+) -> Result<MavenSettingsProfile, MavenSettingsError> {
     if !registry_path.is_file() {
         return Err(MavenSettingsError::ProfileNotFound {
             name: name.to_owned(),
         });
     }
     let contents =
-        fs::read_to_string(&registry_path).map_err(|source| MavenSettingsError::RegistryRead {
-            path: registry_path.clone(),
+        fs::read_to_string(registry_path).map_err(|source| MavenSettingsError::RegistryRead {
+            path: registry_path.to_owned(),
             source,
         })?;
-    let settings_path = parse_registry_path(&registry_path, &contents)?;
+    let settings_path = parse_registry_path(registry_path, &contents)?;
     Ok(MavenSettingsProfile {
         name: name.to_owned(),
         path: settings_path,
@@ -322,7 +321,9 @@ fn parse_registry_path(
     registry_path: &Path,
     contents: &str,
 ) -> Result<PathBuf, MavenSettingsError> {
-    let mut path = None;
+    let mut schema_version = None;
+    let mut legacy_path = None;
+    let mut encoded_path = None;
     for line in contents
         .lines()
         .map(str::trim)
@@ -334,18 +335,52 @@ fn parse_registry_path(
                 message: "expected key=value".to_owned(),
             });
         };
-        if key.trim() != SETTINGS_PATH_KEY || path.is_some() || value.trim().is_empty() {
-            return Err(MavenSettingsError::InvalidRegistry {
-                path: registry_path.to_owned(),
-                message: format!("expected exactly one non-empty '{SETTINGS_PATH_KEY}' entry"),
-            });
+        let key = key.trim();
+        let value = value.trim();
+        if value.is_empty() {
+            return Err(invalid_registry(
+                registry_path,
+                format!("'{key}' must not be empty"),
+            ));
         }
-        path = Some(PathBuf::from(value.trim()));
+        match key {
+            SCHEMA_VERSION_KEY if schema_version.is_none() => schema_version = Some(value),
+            SETTINGS_PATH_KEY if legacy_path.is_none() => legacy_path = Some(value),
+            SETTINGS_PATH_HEX_KEY if encoded_path.is_none() => encoded_path = Some(value),
+            _ => {
+                return Err(invalid_registry(
+                    registry_path,
+                    format!("duplicate or unknown entry '{key}'"),
+                ));
+            }
+        }
     }
-    path.ok_or_else(|| MavenSettingsError::InvalidRegistry {
-        path: registry_path.to_owned(),
-        message: format!("missing '{SETTINGS_PATH_KEY}' entry"),
-    })
+    let path = match schema_version.unwrap_or("0") {
+        "0" => legacy_path
+            .map(PathBuf::from)
+            .ok_or_else(|| invalid_registry(registry_path, "missing 'path' entry")),
+        CURRENT_SCHEMA_VERSION => encoded_path
+            .and_then(crate::storage::decode_path)
+            .ok_or_else(|| invalid_registry(registry_path, "invalid or missing 'path.hex' entry")),
+        version => Err(invalid_registry(
+            registry_path,
+            format!("unsupported schema version '{version}'"),
+        )),
+    }?;
+    if !path.is_absolute() {
+        return Err(invalid_registry(
+            registry_path,
+            "settings path must be absolute",
+        ));
+    }
+    Ok(path)
+}
+
+fn invalid_registry(path: &Path, message: impl Into<String>) -> MavenSettingsError {
+    MavenSettingsError::InvalidRegistry {
+        path: path.to_owned(),
+        message: message.into(),
+    }
 }
 
 fn profile_path(storage_directory: &Path, name: &str) -> PathBuf {
@@ -445,5 +480,39 @@ mod tests {
 
         remove_in(storage.path(), "temporary").unwrap();
         assert!(list_in(storage.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn reads_legacy_registrations_and_rewrites_them_with_the_current_schema() {
+        let storage = tempfile::tempdir().unwrap();
+        let files = tempfile::tempdir().unwrap();
+        let settings = settings_file(files.path(), "settings.xml");
+        let settings = fs::canonicalize(settings).unwrap();
+        let registry_path = profile_path(storage.path(), "legacy");
+        fs::create_dir_all(registry_path.parent().unwrap()).unwrap();
+        fs::write(&registry_path, format!("path={}\n", settings.display())).unwrap();
+
+        assert_eq!(
+            resolve_in(storage.path(), "legacy").unwrap().path(),
+            settings
+        );
+        register_in(storage.path(), "legacy", &settings).unwrap();
+
+        let migrated = fs::read_to_string(registry_path).unwrap();
+        assert!(migrated.starts_with("schema.version=1\npath.hex="));
+        assert!(!migrated.contains(&settings.display().to_string()));
+    }
+
+    #[test]
+    fn rejects_unknown_registry_schema_versions() {
+        let storage = tempfile::tempdir().unwrap();
+        let registry_path = profile_path(storage.path(), "future");
+        fs::create_dir_all(registry_path.parent().unwrap()).unwrap();
+        fs::write(&registry_path, "schema.version=99\npath.hex=00\n").unwrap();
+
+        assert!(matches!(
+            read_registration_in(storage.path(), "future"),
+            Err(MavenSettingsError::InvalidRegistry { .. })
+        ));
     }
 }

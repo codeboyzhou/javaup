@@ -236,8 +236,10 @@ fn manages_project_settings_and_honors_command_line_overrides() {
 
     let project_config = fs::read_dir(fixture.javaup_home.join("projects"))
         .unwrap()
-        .next()
-        .unwrap()
+        .filter_map(Result::ok)
+        .find(|entry| {
+            entry.path().extension().and_then(|value| value.to_str()) == Some("properties")
+        })
         .unwrap()
         .path();
     assert!(
