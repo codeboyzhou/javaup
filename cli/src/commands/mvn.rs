@@ -152,9 +152,16 @@ fn find_explicit_settings(arguments: &[OsString]) -> Option<ExplicitSettings> {
 
 fn format_command(arguments: &[OsString]) -> String {
     let mut command = String::from("mvn");
+    let mut redact_next = false;
     for argument in arguments {
         command.push(' ');
         let argument = argument.to_string_lossy();
+        let (argument, should_redact_next) = if redact_next {
+            ("<redacted>".to_owned(), false)
+        } else {
+            redact_argument(&argument)
+        };
+        redact_next = should_redact_next;
         if argument.is_empty() || argument.chars().any(char::is_whitespace) {
             command.push_str(&format!("{argument:?}"));
         } else {
@@ -162,6 +169,47 @@ fn format_command(arguments: &[OsString]) -> String {
         }
     }
     command
+}
+
+fn redact_argument(argument: &str) -> (String, bool) {
+    if let Some(property) = argument.strip_prefix("-D")
+        && let Some((key, _)) = property.split_once('=')
+        && is_sensitive_key(key)
+    {
+        return (format!("-D{key}=<redacted>"), false);
+    }
+
+    if let Some((key, _)) = argument.split_once('=')
+        && key.starts_with('-')
+        && is_sensitive_key(key.trim_start_matches('-'))
+    {
+        return (format!("{key}=<redacted>"), false);
+    }
+
+    let key = argument.trim_start_matches('-');
+    if argument.starts_with('-') && is_sensitive_key(key) {
+        return (argument.to_owned(), true);
+    }
+    (argument.to_owned(), false)
+}
+
+fn is_sensitive_key(key: &str) -> bool {
+    let normalized = key.to_ascii_lowercase().replace(['-', '_'], ".");
+    normalized.split('.').any(|component| {
+        matches!(
+            component,
+            "password"
+                | "passwd"
+                | "passphrase"
+                | "token"
+                | "secret"
+                | "apikey"
+                | "credential"
+                | "credentials"
+                | "privatekey"
+                | "accesskey"
+        )
+    })
 }
 
 fn exit_description(status: ExitStatus) -> String {
@@ -185,6 +233,20 @@ mod tests {
                 OsString::from("-Dmessage=hello world"),
             ]),
             "mvn verify -DskipTests \"-Dmessage=hello world\""
+        );
+    }
+
+    #[test]
+    fn redacts_secrets_from_command_summaries() {
+        assert_eq!(
+            format_command(&[
+                "deploy".into(),
+                "-Drepository.password=hunter2".into(),
+                "--token".into(),
+                "top-secret".into(),
+                "-DskipTests=true".into(),
+            ]),
+            "mvn deploy -Drepository.password=<redacted> --token <redacted> -DskipTests=true"
         );
     }
 

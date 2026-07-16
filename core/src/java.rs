@@ -304,10 +304,17 @@ fn parse_java_version_output(output: &str) -> Option<String> {
 pub(crate) fn parse_java_major(value: &str) -> Option<u32> {
     let value = value.trim().trim_start_matches(['\"', '\'', '[', '(']);
     let major = value.strip_prefix("1.").unwrap_or(value);
-    let digits: String = major
+    let digit_count = major
         .chars()
         .take_while(|character| character.is_ascii_digit())
-        .collect();
+        .map(char::len_utf8)
+        .sum();
+    let (digits, remainder) = major.split_at(digit_count);
+    if remainder.chars().next().is_some_and(|character| {
+        !matches!(character, '.' | '_' | '-' | '+' | ',' | ')' | ']' | ' ')
+    }) {
+        return None;
+    }
     let major = digits.parse().ok()?;
     (major >= 5).then_some(major)
 }
@@ -496,6 +503,7 @@ mod tests {
         assert_eq!(parse_java_major("1.8.0_442"), Some(8));
         assert_eq!(parse_java_major("17.0.12"), Some(17));
         assert_eq!(parse_java_major("[21,)"), Some(21));
+        assert_eq!(parse_java_major("17invalid"), None);
         assert_eq!(parse_java_major("invalid"), None);
         assert_eq!(
             parse_java_version_output("openjdk version \"17.0.12\" 2024-07-16"),

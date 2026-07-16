@@ -20,6 +20,16 @@ fn write_fake_jdk(home: &Path, major_version: u32) {
     }
 }
 
+fn write_fake_wrapper(project: &Path) {
+    let wrapper = project.join(if cfg!(windows) { "mvnw.cmd" } else { "mvnw" });
+    fs::write(&wrapper, "").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+}
+
 #[test]
 fn init_reports_each_stage_and_saves_the_environment() {
     let fixture = tempfile::tempdir().unwrap();
@@ -37,6 +47,7 @@ fn init_reports_each_stage_and_saves_the_environment() {
         "distributionUrl=https://example.test/apache-maven-3.9.9-bin.zip\n",
     )
     .unwrap();
+    write_fake_wrapper(&project);
     write_fake_jdk(&java_home, 17);
 
     let result = Command::new(env!("CARGO_BIN_EXE_jup"))
@@ -132,6 +143,7 @@ fn status_reports_the_nearest_initialized_project() {
         "distributionUrl=https://example.test/apache-maven-3.9.9-bin.zip\n",
     )
     .unwrap();
+    write_fake_wrapper(&project);
     write_fake_jdk(&java_home, 21);
 
     let init = Command::new(env!("CARGO_BIN_EXE_jup"))

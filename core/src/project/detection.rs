@@ -4,11 +4,9 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus, Output};
+use std::process::ExitStatus;
 
-use super::{
-    MavenEnvironment, ProjectDetectionEvent, ProjectEnvironment, ProjectType, is_maven_version,
-};
+use super::{MavenEnvironment, ProjectDetectionEvent, ProjectEnvironment, ProjectType, maven};
 use crate::java::{JdkDiscoveryError, JdkInstallation, parse_java_major};
 
 const POM_FILE_NAME: &str = "pom.xml";
@@ -37,6 +35,9 @@ pub enum ProjectDetectionError {
     },
     MavenWrapperVersionNotFound {
         properties_path: PathBuf,
+    },
+    MavenWrapperNotFound {
+        project_dir: PathBuf,
     },
     MavenCommandUnavailable {
         source: io::Error,
@@ -74,6 +75,11 @@ impl fmt::Display for ProjectDetectionError {
                 formatter,
                 "could not determine the Maven version from {}",
                 properties_path.display()
+            ),
+            Self::MavenWrapperNotFound { project_dir } => write!(
+                formatter,
+                "Maven Wrapper properties exist, but no executable wrapper was found in {}",
+                project_dir.display()
             ),
             Self::MavenCommandUnavailable { source } => write!(
                 formatter,
@@ -137,7 +143,7 @@ where
         major_version: java.major_version(),
         home: java.home().to_owned(),
     });
-    let maven = detect_maven(project_dir, observer)?;
+    let maven = detect_maven(project_dir, &java, observer)?;
     Ok(ProjectEnvironment {
         project_type: ProjectType::Maven,
         java,
@@ -147,22 +153,32 @@ where
 
 fn detect_maven<F>(
     project_dir: &Path,
+    java: &JdkInstallation,
     observer: &mut F,
 ) -> Result<MavenEnvironment, ProjectDetectionError>
 where
     F: FnMut(ProjectDetectionEvent),
 {
-    let wrapper_properties = project_dir.join(".mvn/wrapper/maven-wrapper.properties");
+    let wrapper_properties = maven::wrapper_properties_path(project_dir);
     if wrapper_properties.is_file() {
+        if maven::find_wrapper(project_dir).is_none() {
+            return Err(ProjectDetectionError::MavenWrapperNotFound {
+                project_dir: project_dir.to_owned(),
+            });
+        }
         observer(ProjectDetectionEvent::ReadingMavenWrapper {
             properties_path: wrapper_properties.clone(),
         });
-        let contents = read_to_string(&wrapper_properties)?;
-        let version = parse_wrapper_maven_version(&contents).ok_or({
-            ProjectDetectionError::MavenWrapperVersionNotFound {
-                properties_path: wrapper_properties,
-            }
-        })?;
+        let version = maven::read_wrapper_version(&wrapper_properties)
+            .map_err(|source| ProjectDetectionError::FileAccess {
+                path: wrapper_properties.clone(),
+                source,
+            })?
+            .ok_or({
+                ProjectDetectionError::MavenWrapperVersionNotFound {
+                    properties_path: wrapper_properties,
+                }
+            })?;
         observer(ProjectDetectionEvent::MavenDetected {
             version: version.clone(),
             uses_wrapper: true,
@@ -175,8 +191,17 @@ where
     }
 
     observer(ProjectDetectionEvent::MavenWrapperUnavailable);
-    let output = run_maven_version(project_dir)
-        .map_err(|source| ProjectDetectionError::MavenCommandUnavailable { source })?;
+    let executable = maven::find_maven_on_path().ok_or_else(|| {
+        ProjectDetectionError::MavenCommandUnavailable {
+            source: io::Error::new(io::ErrorKind::NotFound, "Maven is not available on PATH"),
+        }
+    })?;
+    let output =
+        maven::run_maven_version(&executable, project_dir, java.home()).map_err(|error| {
+            ProjectDetectionError::MavenCommandUnavailable {
+                source: error.command_source(),
+            }
+        })?;
     if !output.status.success() {
         return Err(ProjectDetectionError::MavenCommandFailed {
             status: output.status,
@@ -188,8 +213,8 @@ where
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let version =
-        parse_maven_version_output(&combined).ok_or(ProjectDetectionError::MavenVersionNotFound)?;
+    let version = maven::parse_maven_version_output(&combined)
+        .ok_or(ProjectDetectionError::MavenVersionNotFound)?;
     observer(ProjectDetectionEvent::MavenDetected {
         version: version.clone(),
         uses_wrapper: false,
@@ -199,85 +224,6 @@ where
         uses_wrapper: false,
         settings_profile: None,
     })
-}
-
-fn run_maven_version(project_dir: &Path) -> io::Result<Output> {
-    let mut last_not_found = None;
-    for executable in maven_command_candidates() {
-        match Command::new(executable)
-            .arg("--version")
-            .current_dir(project_dir)
-            .output()
-        {
-            Ok(output) => return Ok(output),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                last_not_found = Some(error);
-            }
-            Err(error) => return Err(error),
-        }
-    }
-
-    Err(last_not_found.expect("Maven command candidates must not be empty"))
-}
-
-#[cfg(windows)]
-fn maven_command_candidates() -> &'static [&'static str] {
-    &["mvn.cmd", "mvn.bat", "mvn.exe", "mvn"]
-}
-
-#[cfg(not(windows))]
-fn maven_command_candidates() -> &'static [&'static str] {
-    &["mvn"]
-}
-
-fn parse_wrapper_maven_version(contents: &str) -> Option<String> {
-    let distribution_url = contents.lines().find_map(|line| {
-        let line = line.trim();
-        if line.starts_with('#') || line.starts_with('!') {
-            return None;
-        }
-        let (key, value) = line.split_once('=')?;
-        (key.trim() == "distributionUrl").then(|| value.trim().replace("\\:", ":"))
-    })?;
-
-    extract_version_after_marker(&distribution_url, "apache-maven-")
-        .or_else(|| extract_version_after_marker(&distribution_url, "maven-mvnd-"))
-}
-
-fn extract_version_after_marker(value: &str, marker: &str) -> Option<String> {
-    let remainder = value.rsplit_once(marker)?.1;
-    let archive_name = remainder.split(['?', '#']).next()?.trim();
-    let version = ["-bin.zip", "-bin.tar.gz", ".zip", ".tar.gz"]
-        .into_iter()
-        .find_map(|suffix| archive_name.strip_suffix(suffix))?;
-    is_maven_version(version).then(|| version.to_owned())
-}
-
-fn parse_maven_version_output(output: &str) -> Option<String> {
-    output.lines().find_map(|line| {
-        let line = strip_ansi_codes(line);
-        let remainder = line.trim().strip_prefix("Apache Maven ")?;
-        let version = remainder.split_whitespace().next()?;
-        is_maven_version(version).then(|| version.to_owned())
-    })
-}
-
-fn strip_ansi_codes(value: &str) -> String {
-    let mut result = String::with_capacity(value.len());
-    let mut chars = value.chars().peekable();
-    while let Some(character) = chars.next() {
-        if character == '\u{1b}' && chars.peek() == Some(&'[') {
-            chars.next();
-            for sequence_character in chars.by_ref() {
-                if sequence_character.is_ascii_alphabetic() {
-                    break;
-                }
-            }
-        } else {
-            result.push(character);
-        }
-    }
-    result
 }
 
 fn detect_java_version(pom_path: &Path) -> Result<u32, ProjectDetectionError> {
@@ -353,9 +299,10 @@ fn load_pom_model(
     }
 
     if let Some(parent) = child(project, "parent") {
-        let relative_path = child(parent, "relativePath")
-            .and_then(text)
-            .unwrap_or_else(|| "../pom.xml".to_owned());
+        let relative_path = match child(parent, "relativePath") {
+            Some(relative_path) => relative_path.text().map(str::trim).unwrap_or("").to_owned(),
+            None => "../pom.xml".to_owned(),
+        };
         if !relative_path.is_empty() {
             let parent_path = pom_path
                 .parent()
@@ -382,10 +329,14 @@ fn load_pom_model(
 }
 
 fn collect_plugin_versions(project: roxmltree::Node<'_, '_>, model: &mut PomModel) {
-    for plugin in project
-        .descendants()
-        .filter(|node| node.is_element() && node.tag_name().name() == "plugin")
-    {
+    let Some(build) = child(project, "build") else {
+        return;
+    };
+    let plugins = child(build, "plugins")
+        .into_iter()
+        .flat_map(|plugins| plugins.children())
+        .filter(|node| node.is_element() && node.tag_name().name() == "plugin");
+    for plugin in plugins {
         let artifact_id = child(plugin, "artifactId").and_then(text);
         let Some(artifact_id) = artifact_id else {
             continue;
@@ -482,27 +433,23 @@ mod tests {
     #[test]
     fn parses_maven_versions() {
         assert_eq!(
-            parse_wrapper_maven_version(
+            maven::parse_wrapper_maven_version(
                 "distributionUrl=https\\://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.9/apache-maven-3.9.9-bin.zip"
             ),
             Some("3.9.9".to_owned())
         );
         assert_eq!(
-            parse_wrapper_maven_version(
+            maven::parse_wrapper_maven_version(
                 "distributionUrl=https://example.test/apache-maven-4.0.0-rc-4-bin.zip"
             ),
             Some("4.0.0-rc-4".to_owned())
         );
         assert_eq!(
-            parse_maven_version_output("Apache Maven 3.9.11 (abcdef)\nMaven home: /opt/maven"),
+            maven::parse_maven_version_output(
+                "Apache Maven 3.9.11 (abcdef)\nMaven home: /opt/maven"
+            ),
             Some("3.9.11".to_owned())
         );
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn prefers_the_windows_maven_command_launcher() {
-        assert_eq!(maven_command_candidates().first(), Some(&"mvn.cmd"));
     }
 
     #[test]
@@ -530,6 +477,34 @@ mod tests {
             detect_java_version(&project_directory.join(POM_FILE_NAME)).unwrap(),
             17
         );
+    }
+
+    #[test]
+    fn honors_an_empty_parent_relative_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let project_directory = directory.path().join("project");
+        fs::create_dir_all(&project_directory).unwrap();
+        fs::write(
+            directory.path().join(POM_FILE_NAME),
+            r#"<project><properties><java.version>8</java.version></properties></project>"#,
+        )
+        .unwrap();
+        let pom = project_directory.join(POM_FILE_NAME);
+        fs::write(
+            &pom,
+            r#"<project>
+                <parent>
+                    <groupId>example</groupId><artifactId>parent</artifactId><version>1</version>
+                    <relativePath/>
+                </parent>
+            </project>"#,
+        )
+        .unwrap();
+
+        assert!(matches!(
+            detect_java_version(&pom),
+            Err(ProjectDetectionError::JavaVersionNotFound { .. })
+        ));
     }
 
     #[test]
@@ -570,6 +545,25 @@ mod tests {
     }
 
     #[test]
+    fn ignores_compiler_configuration_in_inactive_profiles() {
+        let directory = tempfile::tempdir().unwrap();
+        let pom = directory.path().join(POM_FILE_NAME);
+        fs::write(
+            &pom,
+            r#"<project>
+                <properties><java.version>17</java.version></properties>
+                <profiles><profile><id>legacy</id><build><plugins><plugin>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration><release>8</release></configuration>
+                </plugin></plugins></build></profile></profiles>
+            </project>"#,
+        )
+        .unwrap();
+
+        assert_eq!(detect_java_version(&pom).unwrap(), 17);
+    }
+
+    #[test]
     fn detects_a_maven_wrapper_project() {
         let directory = tempfile::tempdir().unwrap();
         fs::create_dir_all(directory.path().join(".mvn/wrapper")).unwrap();
@@ -578,6 +572,15 @@ mod tests {
             r#"<project><properties><java.version>1.8</java.version></properties></project>"#,
         )
         .unwrap();
+        let wrapper = directory
+            .path()
+            .join(if cfg!(windows) { "mvnw.cmd" } else { "mvnw" });
+        fs::write(&wrapper, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+        }
         fs::write(
             directory
                 .path()
@@ -591,7 +594,8 @@ mod tests {
             8
         );
         let mut events = Vec::new();
-        let maven = detect_maven(directory.path(), &mut |event| events.push(event)).unwrap();
+        let java = JdkInstallation::recorded(8, directory.path().join("jdk-8"));
+        let maven = detect_maven(directory.path(), &java, &mut |event| events.push(event)).unwrap();
         assert_eq!(maven.version(), "3.9.9");
         assert!(maven.uses_wrapper());
         assert_eq!(
@@ -608,6 +612,25 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn rejects_wrapper_properties_without_an_executable() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::create_dir_all(directory.path().join(".mvn/wrapper")).unwrap();
+        fs::write(
+            directory
+                .path()
+                .join(".mvn/wrapper/maven-wrapper.properties"),
+            "distributionUrl=https://example.test/apache-maven-3.9.9-bin.zip\n",
+        )
+        .unwrap();
+        let java = JdkInstallation::recorded(17, directory.path().join("jdk-17"));
+
+        assert!(matches!(
+            detect_maven(directory.path(), &java, &mut |_| {}),
+            Err(ProjectDetectionError::MavenWrapperNotFound { .. })
+        ));
     }
 
     #[test]

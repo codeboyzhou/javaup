@@ -8,6 +8,7 @@ use crate::maven_settings::MavenSettingsProfile;
 mod build;
 mod config;
 mod detection;
+mod maven;
 
 pub use build::ProjectBuildError;
 pub use config::ProjectConfigError;

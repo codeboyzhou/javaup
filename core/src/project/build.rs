@@ -1,21 +1,47 @@
-use std::env;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitStatus};
 
-use super::ProjectEnvironment;
+use super::{ProjectEnvironment, maven};
 use crate::java::JdkValidationError;
 
 /// Error raised while preparing a project build command.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ProjectBuildError {
-    InvalidJdk { source: JdkValidationError },
-    MavenWrapperNotFound { project_dir: PathBuf },
+    InvalidJdk {
+        source: JdkValidationError,
+    },
+    MavenWrapperNotFound {
+        project_dir: PathBuf,
+    },
     MavenCommandUnavailable,
-    InvalidPath { source: env::JoinPathsError },
+    MavenConfigurationRead {
+        path: PathBuf,
+        source: io::Error,
+    },
+    MavenVersionCommand {
+        path: PathBuf,
+        source: io::Error,
+    },
+    MavenVersionCommandFailed {
+        path: PathBuf,
+        status: ExitStatus,
+    },
+    MavenVersionNotFound {
+        path: PathBuf,
+    },
+    MavenVersionMismatch {
+        path: PathBuf,
+        expected: String,
+        actual: String,
+    },
+    InvalidPath {
+        source: std::env::JoinPathsError,
+    },
 }
 
 impl fmt::Display for ProjectBuildError {
@@ -32,6 +58,35 @@ impl fmt::Display for ProjectBuildError {
             Self::MavenCommandUnavailable => {
                 write!(formatter, "Maven is not available on PATH")
             }
+            Self::MavenConfigurationRead { path, source } => write!(
+                formatter,
+                "could not read Maven configuration {}: {source}",
+                path.display()
+            ),
+            Self::MavenVersionCommand { path, source } => write!(
+                formatter,
+                "could not run '{} --version': {source}",
+                path.display()
+            ),
+            Self::MavenVersionCommandFailed { path, status } => write!(
+                formatter,
+                "'{} --version' failed with status {status}",
+                path.display()
+            ),
+            Self::MavenVersionNotFound { path } => write!(
+                formatter,
+                "could not determine the Maven version for {}",
+                path.display()
+            ),
+            Self::MavenVersionMismatch {
+                path,
+                expected,
+                actual,
+            } => write!(
+                formatter,
+                "{} provides Maven {actual}, but the project was initialized with Maven {expected}; run 'jup init' again or restore the recorded Maven version",
+                path.display()
+            ),
             Self::InvalidPath { source } => {
                 write!(
                     formatter,
@@ -46,6 +101,8 @@ impl Error for ProjectBuildError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::InvalidJdk { source } => Some(source),
+            Self::MavenConfigurationRead { source, .. }
+            | Self::MavenVersionCommand { source, .. } => Some(source),
             Self::InvalidPath { source } => Some(source),
             _ => None,
         }
@@ -66,68 +123,83 @@ where
         .validate()
         .map_err(|source| ProjectBuildError::InvalidJdk { source })?;
 
-    let executable = if environment.maven.uses_wrapper {
-        find_wrapper(project_dir).ok_or_else(|| ProjectBuildError::MavenWrapperNotFound {
-            project_dir: project_dir.to_owned(),
-        })?
-    } else {
-        find_maven_on_path().ok_or(ProjectBuildError::MavenCommandUnavailable)?
-    };
-
-    let mut paths = vec![environment.java.home().join("bin")];
-    if let Some(path) = env::var_os("PATH") {
-        paths.extend(env::split_paths(&path));
-    }
-    let path =
-        env::join_paths(paths).map_err(|source| ProjectBuildError::InvalidPath { source })?;
+    let executable = validate_maven(project_dir, environment)?;
 
     let mut command = Command::new(executable);
-    command
-        .args(arguments)
-        .current_dir(project_dir)
-        .env("JAVA_HOME", environment.java.home())
-        .env("PATH", path);
+    command.args(arguments).current_dir(project_dir);
+    maven::configure_java(&mut command, environment.java.home())
+        .map_err(|source| ProjectBuildError::InvalidPath { source })?;
     Ok(command)
 }
 
-fn find_wrapper(project_dir: &Path) -> Option<PathBuf> {
-    wrapper_names()
-        .iter()
-        .map(|name| project_dir.join(name))
-        .find(|path| path.is_file())
-}
-
-fn find_maven_on_path() -> Option<PathBuf> {
-    let path = env::var_os("PATH")?;
-    for directory in env::split_paths(&path) {
-        for name in maven_command_names() {
-            let candidate = directory.join(name);
-            if candidate.is_file() {
-                return Some(candidate);
+fn validate_maven(
+    project_dir: &Path,
+    environment: &ProjectEnvironment,
+) -> Result<PathBuf, ProjectBuildError> {
+    if environment.maven.uses_wrapper {
+        let executable = maven::find_wrapper(project_dir).ok_or_else(|| {
+            ProjectBuildError::MavenWrapperNotFound {
+                project_dir: project_dir.to_owned(),
             }
-        }
+        })?;
+        let properties_path = maven::wrapper_properties_path(project_dir);
+        let actual = maven::read_wrapper_version(&properties_path)
+            .map_err(|source| ProjectBuildError::MavenConfigurationRead {
+                path: properties_path.clone(),
+                source,
+            })?
+            .ok_or(ProjectBuildError::MavenVersionNotFound {
+                path: properties_path,
+            })?;
+        ensure_version_matches(&executable, &environment.maven.version, actual)?;
+        return Ok(executable);
     }
-    None
+
+    let executable =
+        maven::find_maven_on_path().ok_or(ProjectBuildError::MavenCommandUnavailable)?;
+    let output = maven::run_maven_version(&executable, project_dir, environment.java.home())
+        .map_err(|error| match error {
+            maven::MavenProbeError::Command(source) => ProjectBuildError::MavenVersionCommand {
+                path: executable.clone(),
+                source,
+            },
+            maven::MavenProbeError::InvalidPath(source) => {
+                ProjectBuildError::InvalidPath { source }
+            }
+        })?;
+    if !output.status.success() {
+        return Err(ProjectBuildError::MavenVersionCommandFailed {
+            path: executable,
+            status: output.status,
+        });
+    }
+    let combined = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let actual = maven::parse_maven_version_output(&combined).ok_or_else(|| {
+        ProjectBuildError::MavenVersionNotFound {
+            path: executable.clone(),
+        }
+    })?;
+    ensure_version_matches(&executable, &environment.maven.version, actual)?;
+    Ok(executable)
 }
 
-#[cfg(windows)]
-fn wrapper_names() -> &'static [&'static str] {
-    &["mvnw.cmd", "mvnw.bat", "mvnw.exe", "mvnw"]
-}
-
-#[cfg(not(windows))]
-fn wrapper_names() -> &'static [&'static str] {
-    &["mvnw"]
-}
-
-#[cfg(windows)]
-fn maven_command_names() -> &'static [&'static str] {
-    &["mvn.cmd", "mvn.bat", "mvn.exe", "mvn"]
-}
-
-#[cfg(not(windows))]
-fn maven_command_names() -> &'static [&'static str] {
-    &["mvn"]
+fn ensure_version_matches(
+    executable: &Path,
+    expected: &str,
+    actual: String,
+) -> Result<(), ProjectBuildError> {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(ProjectBuildError::MavenVersionMismatch {
+        path: executable.to_owned(),
+        expected: expected.to_owned(),
+        actual,
+    })
 }
 
 #[cfg(test)]
@@ -160,8 +232,23 @@ mod tests {
         )
         .unwrap();
 
-        let wrapper = directory.path().join(wrapper_names()[0]);
+        let wrapper = directory
+            .path()
+            .join(if cfg!(windows) { "mvnw.cmd" } else { "mvnw" });
         fs::write(&wrapper, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        fs::create_dir_all(directory.path().join(".mvn/wrapper")).unwrap();
+        fs::write(
+            directory
+                .path()
+                .join(".mvn/wrapper/maven-wrapper.properties"),
+            "distributionUrl=https://example.test/apache-maven-3.9.9-bin.zip\n",
+        )
+        .unwrap();
         let environment = ProjectEnvironment {
             project_type: ProjectType::Maven,
             java: JdkInstallation::recorded(17, java_home.clone()),
@@ -187,5 +274,21 @@ mod tests {
             command.get_args().collect::<Vec<_>>(),
             vec![OsStr::new("clean"), OsStr::new("package")]
         );
+    }
+
+    #[test]
+    fn rejects_a_maven_version_that_changed_after_initialization() {
+        let executable = Path::new("mvn");
+        let error =
+            ensure_version_matches(executable, "3.9.9", "4.0.0-rc-4".to_owned()).unwrap_err();
+
+        assert!(matches!(
+            error,
+            ProjectBuildError::MavenVersionMismatch {
+                expected,
+                actual,
+                ..
+            } if expected == "3.9.9" && actual == "4.0.0-rc-4"
+        ));
     }
 }
