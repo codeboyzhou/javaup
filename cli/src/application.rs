@@ -113,7 +113,7 @@ mod tests {
         assert!(help.contains(javaup_core::PRODUCT_DESCRIPTION));
         assert!(help.contains("Usage: jup <COMMAND>"));
         assert!(help.contains("init"));
-        assert!(help.contains("build"));
+        assert!(help.contains("mvn"));
         assert!(help.contains("status"));
         assert!(help.contains("version"));
         assert!(help.contains("--help"));
@@ -130,7 +130,7 @@ mod tests {
         assert_eq!(code, EXIT_SUCCESS);
         assert!(help.contains("Usage: jup <COMMAND>"));
         assert!(help.contains("init"));
-        assert!(help.contains("build"));
+        assert!(help.contains("mvn"));
         assert!(help.contains("status"));
         assert!(help.contains("version"));
         assert!(help.contains("--help"));

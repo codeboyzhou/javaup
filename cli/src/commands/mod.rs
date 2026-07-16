@@ -4,8 +4,8 @@ use std::process::ExitStatus;
 use crate::cli::Command;
 use crate::output::Output;
 
-mod build;
 mod init;
+mod mvn;
 mod status;
 mod version;
 
@@ -37,8 +37,8 @@ where
 {
     match command {
         Command::Init => init::execute(output).map(|_| CommandOutcome::Success),
-        Command::Build(arguments) => {
-            build::execute(arguments.maven_arguments, output.stdout()).map(CommandOutcome::Process)
+        Command::Mvn(arguments) => {
+            mvn::execute(arguments.maven_arguments, output).map(CommandOutcome::Process)
         }
         Command::Status => status::execute(output).map(|_| CommandOutcome::Success),
         Command::Version => version::execute(output.stdout()).map(|_| CommandOutcome::Success),

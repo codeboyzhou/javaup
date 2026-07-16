@@ -34,8 +34,11 @@ impl Cli {
 pub(crate) enum Command {
     /// Detect the current Maven project and record its required environment.
     Init,
-    /// Build the project with the JDK recorded by `jup init`.
-    Build(BuildArgs),
+    /// Run Maven with the JDK recorded by `jup init`.
+    ///
+    /// Uses Maven Wrapper when configured by `jup init`.
+    #[command(disable_help_flag = true)]
+    Mvn(MvnArgs),
     /// Show the environment recorded for the current project.
     Status,
     /// Print version, platform and build information.
@@ -43,8 +46,8 @@ pub(crate) enum Command {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Args)]
-pub(crate) struct BuildArgs {
-    /// Maven goals and options; defaults to `clean package`.
+pub(crate) struct MvnArgs {
+    /// Maven goals and options passed through unchanged.
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub(crate) maven_arguments: Vec<OsString>,
 }
@@ -74,14 +77,38 @@ mod tests {
     }
 
     #[test]
-    fn parses_build_arguments() {
-        let cli = Cli::parse(["build", "test", "-DskipTests"]).unwrap();
+    fn parses_mvn_arguments() {
+        let cli = Cli::parse(["mvn", "test", "-DskipTests"]).unwrap();
         assert_eq!(
             cli.command,
-            Command::Build(BuildArgs {
+            Command::Mvn(MvnArgs {
                 maven_arguments: vec!["test".into(), "-DskipTests".into()],
             })
         );
+    }
+
+    #[test]
+    fn accepts_mvn_without_adding_goals() {
+        let cli = Cli::parse(["mvn"]).unwrap();
+        assert_eq!(
+            cli.command,
+            Command::Mvn(MvnArgs {
+                maven_arguments: Vec::new(),
+            })
+        );
+    }
+
+    #[test]
+    fn forwards_maven_help_flags() {
+        for argument in ["-h", "--help"] {
+            let cli = Cli::parse(["mvn", argument]).unwrap();
+            assert_eq!(
+                cli.command,
+                Command::Mvn(MvnArgs {
+                    maven_arguments: vec![argument.into()],
+                })
+            );
+        }
     }
 
     #[test]
@@ -101,6 +128,16 @@ mod tests {
     }
 
     #[test]
+    fn describes_mvn_as_a_wrapper_aware_maven_command() {
+        let error = Cli::parse(["help", "mvn"]).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::DisplayHelp);
+        let help = error.to_string();
+        assert!(help.contains("Run Maven with the JDK recorded by `jup init`"));
+        assert!(help.contains("Uses Maven Wrapper when configured by `jup init`"));
+        assert!(help.contains("Maven goals and options passed through unchanged"));
+    }
+
+    #[test]
     fn generates_version_for_version_flags() {
         for argument in ["-V", "--version"] {
             let error = Cli::parse([argument]).unwrap_err();
@@ -115,6 +152,9 @@ mod tests {
     #[test]
     fn rejects_unknown_commands_and_extra_arguments() {
         let error = Cli::parse(["install"]).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidSubcommand);
+
+        let error = Cli::parse(["build"]).unwrap_err();
         assert_eq!(error.kind(), ErrorKind::InvalidSubcommand);
 
         let error = Cli::parse(["version", "extra"]).unwrap_err();
