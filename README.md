@@ -27,9 +27,10 @@ frontend boundary, but its user interface is not implemented yet.
 - A JDK matching the Maven project's configured Java release.
 - Either an executable Maven Wrapper or Maven available on `PATH`.
 
-The checked-in `rust-toolchain.toml` selects the minimum supported Rust
-toolchain and installs the formatting, lint, and coverage components used by
-the repository.
+The checked-in `rust-toolchain.toml` follows the current stable Rust toolchain
+and installs the formatting and lint components used during development. CI
+separately verifies the minimum supported Rust 1.89.0 toolchain and installs
+LLVM tooling for coverage reporting.
 
 ## Build
 
@@ -85,8 +86,9 @@ a specific Java major version.
 
 Stored files carry an explicit schema version, preserve platform-native paths,
 and are replaced atomically while holding an operating-system file lock.
-Legacy unversioned files are read and rewritten in the current format on the
-next successful update. Invalid files are reported rather than overwritten.
+Unversioned, unsupported-version, and otherwise invalid files are rejected
+rather than migrated or overwritten. Reinitialize the affected project or
+register the settings profile again to create a current record.
 
 ## Repository structure
 

@@ -16,9 +16,7 @@ const PROJECTS_DIRECTORY_NAME: &str = "projects";
 const ENVIRONMENT_FILE_EXTENSION: &str = "properties";
 const SCHEMA_VERSION_KEY: &str = "schema.version";
 const CURRENT_SCHEMA_VERSION: &str = "1";
-const PROJECT_PATH_KEY: &str = "project.path";
 const PROJECT_PATH_HEX_KEY: &str = "project.path.hex";
-const JAVA_HOME_KEY: &str = "java.home";
 const JAVA_HOME_HEX_KEY: &str = "java.home.hex";
 const MAVEN_SETTINGS_KEY: &str = "maven.settings";
 
@@ -244,29 +242,16 @@ fn load_path(
     })?;
     let values = parse_entries(path, &contents)?;
 
-    let schema_version = values
-        .get(SCHEMA_VERSION_KEY)
-        .map(String::as_str)
-        .unwrap_or("0");
-    if !matches!(schema_version, "0" | CURRENT_SCHEMA_VERSION) {
+    let schema_version = required(path, &values, SCHEMA_VERSION_KEY)?;
+    if schema_version != CURRENT_SCHEMA_VERSION {
         return Err(invalid_value(path, SCHEMA_VERSION_KEY, schema_version));
     }
 
-    let project_path = read_path(
-        path,
-        &values,
-        schema_version,
-        PROJECT_PATH_KEY,
-        PROJECT_PATH_HEX_KEY,
-    )?;
+    let project_path = read_path(path, &values, PROJECT_PATH_HEX_KEY)?;
     if !project_path.is_absolute() {
         return Err(invalid_value(
             path,
-            if schema_version == "0" {
-                PROJECT_PATH_KEY
-            } else {
-                PROJECT_PATH_HEX_KEY
-            },
+            PROJECT_PATH_HEX_KEY,
             "path is not absolute",
         ));
     }
@@ -288,11 +273,7 @@ fn load_path(
         {
             return Err(invalid_value(
                 path,
-                if schema_version == "0" {
-                    PROJECT_PATH_KEY
-                } else {
-                    PROJECT_PATH_HEX_KEY
-                },
+                PROJECT_PATH_HEX_KEY,
                 "path does not match the requested project",
             ));
         }
@@ -310,21 +291,11 @@ fn load_path(
         .filter(|version| *version >= 5)
         .ok_or_else(|| invalid_value(path, "java.version", java_value))?;
 
-    let java_home = read_path(
-        path,
-        &values,
-        schema_version,
-        JAVA_HOME_KEY,
-        JAVA_HOME_HEX_KEY,
-    )?;
+    let java_home = read_path(path, &values, JAVA_HOME_HEX_KEY)?;
     if !java_home.is_absolute() {
         return Err(invalid_value(
             path,
-            if schema_version == "0" {
-                JAVA_HOME_KEY
-            } else {
-                JAVA_HOME_HEX_KEY
-            },
+            JAVA_HOME_HEX_KEY,
             "path is not absolute",
         ));
     }
@@ -470,13 +441,8 @@ fn required<'a>(
 fn read_path(
     registry_path: &Path,
     values: &HashMap<String, String>,
-    schema_version: &str,
-    legacy_key: &'static str,
     encoded_key: &'static str,
 ) -> Result<PathBuf, ProjectConfigError> {
-    if schema_version == "0" {
-        return required(registry_path, values, legacy_key).map(PathBuf::from);
-    }
     let value = required(registry_path, values, encoded_key)?;
     storage::decode_path(value).ok_or_else(|| invalid_value(registry_path, encoded_key, value))
 }
@@ -552,8 +518,9 @@ mod tests {
         fs::write(
             &path,
             format!(
-                "project.path={}\nproject.type=maven\njava.version=abc\njava.home=/jdk\nmaven.version=3.9.9\nmaven.wrapper=false\n",
-                project.path().display()
+                "schema.version=1\nproject.path.hex={}\nproject.type=maven\njava.version=abc\njava.home.hex={}\nmaven.version=3.9.9\nmaven.wrapper=false\n",
+                storage::encode_path(&fs::canonicalize(project.path()).unwrap()),
+                storage::encode_path(&project.path().join("jdk-17")),
             ),
         )
         .unwrap();
@@ -569,7 +536,7 @@ mod tests {
     }
 
     #[test]
-    fn reads_legacy_environments_and_rewrites_them_with_the_current_schema() {
+    fn rejects_environments_without_a_schema_version() {
         let project = tempfile::tempdir().unwrap();
         let storage_directory = tempfile::tempdir().unwrap();
         let path = environment_path(storage_directory.path(), project.path()).unwrap();
@@ -584,13 +551,13 @@ mod tests {
         )
         .unwrap();
 
-        let loaded = load_in(storage_directory.path(), project.path()).unwrap();
-        save_in(storage_directory.path(), project.path(), &loaded).unwrap();
-
-        let migrated = fs::read_to_string(path).unwrap();
-        assert!(migrated.starts_with("schema.version=1\n"));
-        assert!(migrated.contains("project.path.hex="));
-        assert!(migrated.contains("java.home.hex="));
+        assert!(matches!(
+            load_in(storage_directory.path(), project.path()),
+            Err(ProjectConfigError::MissingKey {
+                key: SCHEMA_VERSION_KEY,
+                ..
+            })
+        ));
     }
 
     #[test]

@@ -27,8 +27,8 @@ behavior consistent across frontends.
   Maven environment. Progress is exposed as domain events.
 - `project::build`: revalidates a recorded environment and creates a
   `ProcessInvocation`; it does not start the user's build.
-- `project::config`: serializes project environments, validates schema and
-  project identity, and migrates legacy state.
+- `project::config`: serializes project environments and validates their schema
+  and project identity.
 - `maven_settings`: validates `settings.xml` files and stores named references.
 - `storage`: owns platform directories, native path encoding, atomic replacement,
   and operating-system file locking.
@@ -65,6 +65,8 @@ take an adjacent OS lock, create and sync a temporary file in the destination
 directory, atomically replace the target, and sync the parent directory where
 the platform supports it. Readers reject duplicate, incomplete, unknown-version,
 or wrong-project records. Corrupt data is never silently replaced.
+Schema versions are compatibility boundaries: javaup does not migrate older or
+unversioned records. Users recreate incompatible project/profile state.
 
 ## Domain invariants
 
@@ -85,8 +87,8 @@ or wrong-project records. Corrupt data is never silently replaced.
 1. Add a variant and environment type to `BuildToolEnvironment`.
 2. Implement detection and build-invocation modules behind the existing public
    use cases.
-3. Introduce a new persistence schema version and a migration from the previous
-   version; do not reinterpret old keys in place.
+3. Introduce a new persistence schema version, reject previous versions, and
+   document how users recreate the affected state.
 4. Add frontend commands/adapters without moving process execution into core.
 5. Add unit, property, integration, and platform-matrix coverage for the new
    branch.

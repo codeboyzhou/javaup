@@ -16,8 +16,10 @@ On PowerShell, set the documentation flags with
 
 Changes to platform-native paths, executable discovery, persistence, or process
 creation must be checked on Windows, Linux, and macOS through CI. Persistence
-format changes require a new schema version, a migration test, and a guarantee
-that malformed existing data is not overwritten.
+format changes require a new schema version, rejection tests for missing and
+unsupported versions, and a guarantee that malformed existing data is not
+overwritten. Do not add automatic migrations; document how users recreate the
+affected state.
 
 ## Design expectations
 

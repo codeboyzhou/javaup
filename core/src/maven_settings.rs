@@ -11,7 +11,6 @@ const SETTINGS_DIRECTORY_NAME: &str = "settings";
 const PROFILE_FILE_EXTENSION: &str = "properties";
 const SCHEMA_VERSION_KEY: &str = "schema.version";
 const CURRENT_SCHEMA_VERSION: &str = "1";
-const SETTINGS_PATH_KEY: &str = "path";
 const SETTINGS_PATH_HEX_KEY: &str = "path.hex";
 
 /// A named reference to a Maven `settings.xml` file.
@@ -322,7 +321,6 @@ fn parse_registry_path(
     contents: &str,
 ) -> Result<PathBuf, MavenSettingsError> {
     let mut schema_version = None;
-    let mut legacy_path = None;
     let mut encoded_path = None;
     for line in contents
         .lines()
@@ -345,7 +343,6 @@ fn parse_registry_path(
         }
         match key {
             SCHEMA_VERSION_KEY if schema_version.is_none() => schema_version = Some(value),
-            SETTINGS_PATH_KEY if legacy_path.is_none() => legacy_path = Some(value),
             SETTINGS_PATH_HEX_KEY if encoded_path.is_none() => encoded_path = Some(value),
             _ => {
                 return Err(invalid_registry(
@@ -355,18 +352,21 @@ fn parse_registry_path(
             }
         }
     }
-    let path = match schema_version.unwrap_or("0") {
-        "0" => legacy_path
-            .map(PathBuf::from)
-            .ok_or_else(|| invalid_registry(registry_path, "missing 'path' entry")),
-        CURRENT_SCHEMA_VERSION => encoded_path
-            .and_then(crate::storage::decode_path)
-            .ok_or_else(|| invalid_registry(registry_path, "invalid or missing 'path.hex' entry")),
-        version => Err(invalid_registry(
+    let schema_version = schema_version.ok_or_else(|| {
+        invalid_registry(
             registry_path,
-            format!("unsupported schema version '{version}'"),
-        )),
-    }?;
+            format!("missing '{SCHEMA_VERSION_KEY}' entry"),
+        )
+    })?;
+    if schema_version != CURRENT_SCHEMA_VERSION {
+        return Err(invalid_registry(
+            registry_path,
+            format!("unsupported schema version '{schema_version}'"),
+        ));
+    }
+    let path = encoded_path
+        .and_then(crate::storage::decode_path)
+        .ok_or_else(|| invalid_registry(registry_path, "invalid or missing 'path.hex' entry"))?;
     if !path.is_absolute() {
         return Err(invalid_registry(
             registry_path,
@@ -483,24 +483,17 @@ mod tests {
     }
 
     #[test]
-    fn reads_legacy_registrations_and_rewrites_them_with_the_current_schema() {
+    fn rejects_registrations_without_a_schema_version() {
         let storage = tempfile::tempdir().unwrap();
-        let files = tempfile::tempdir().unwrap();
-        let settings = settings_file(files.path(), "settings.xml");
-        let settings = fs::canonicalize(settings).unwrap();
-        let registry_path = profile_path(storage.path(), "legacy");
+        let registry_path = profile_path(storage.path(), "unversioned");
         fs::create_dir_all(registry_path.parent().unwrap()).unwrap();
-        fs::write(&registry_path, format!("path={}\n", settings.display())).unwrap();
+        fs::write(&registry_path, "path.hex=00\n").unwrap();
 
-        assert_eq!(
-            resolve_in(storage.path(), "legacy").unwrap().path(),
-            settings
-        );
-        register_in(storage.path(), "legacy", &settings).unwrap();
-
-        let migrated = fs::read_to_string(registry_path).unwrap();
-        assert!(migrated.starts_with("schema.version=1\npath.hex="));
-        assert!(!migrated.contains(&settings.display().to_string()));
+        assert!(matches!(
+            read_registration_in(storage.path(), "unversioned"),
+            Err(MavenSettingsError::InvalidRegistry { message, .. })
+                if message.contains(SCHEMA_VERSION_KEY)
+        ));
     }
 
     #[test]
