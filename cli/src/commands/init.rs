@@ -23,7 +23,9 @@ where
     }
 
     output.info("Saving the detected project environment")?;
-    let config_path = environment.save(&project_dir).map_err(io::Error::other)?;
+    let config_path = environment
+        .save_preserving_maven_settings(&project_dir)
+        .map_err(io::Error::other)?;
 
     writeln!(
         output.stdout(),

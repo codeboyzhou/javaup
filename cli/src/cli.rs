@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::iter;
+use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 
@@ -39,6 +40,8 @@ pub(crate) enum Command {
     /// Uses Maven Wrapper when configured by `jup init`.
     #[command(disable_help_flag = true)]
     Mvn(MvnArgs),
+    /// Manage named Maven settings profiles and project bindings.
+    Settings(SettingsArgs),
     /// Show the environment recorded for the current project.
     Status,
     /// Print version, platform and build information.
@@ -50,6 +53,37 @@ pub(crate) struct MvnArgs {
     /// Maven goals and options passed through unchanged.
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub(crate) maven_arguments: Vec<OsString>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Args)]
+pub(crate) struct SettingsArgs {
+    #[command(subcommand)]
+    pub(crate) command: SettingsCommand,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
+pub(crate) enum SettingsCommand {
+    /// Register or update a named Maven settings profile.
+    Add {
+        /// Profile name using lowercase letters, digits, '.', '_' or '-'.
+        name: String,
+        /// Path to a Maven settings.xml file.
+        path: PathBuf,
+    },
+    /// List registered Maven settings profiles.
+    List,
+    /// Bind a registered profile to the current initialized project.
+    Use {
+        /// Registered profile name.
+        name: String,
+    },
+    /// Clear the Maven settings binding for the current project.
+    Clear,
+    /// Remove a profile registration without deleting its settings file.
+    Remove {
+        /// Registered profile name.
+        name: String,
+    },
 }
 
 #[cfg(test)]
@@ -74,6 +108,53 @@ mod tests {
     fn parses_status_subcommand() {
         let cli = Cli::parse(["status"]).unwrap();
         assert_eq!(cli.command, Command::Status);
+    }
+
+    #[test]
+    fn parses_settings_subcommands() {
+        assert_eq!(
+            Cli::parse(["settings", "add", "corp-nexus", "settings.xml"])
+                .unwrap()
+                .command,
+            Command::Settings(SettingsArgs {
+                command: SettingsCommand::Add {
+                    name: "corp-nexus".to_owned(),
+                    path: PathBuf::from("settings.xml"),
+                },
+            })
+        );
+        assert_eq!(
+            Cli::parse(["settings", "use", "corp-nexus"])
+                .unwrap()
+                .command,
+            Command::Settings(SettingsArgs {
+                command: SettingsCommand::Use {
+                    name: "corp-nexus".to_owned(),
+                },
+            })
+        );
+        assert_eq!(
+            Cli::parse(["settings", "list"]).unwrap().command,
+            Command::Settings(SettingsArgs {
+                command: SettingsCommand::List,
+            })
+        );
+        assert_eq!(
+            Cli::parse(["settings", "clear"]).unwrap().command,
+            Command::Settings(SettingsArgs {
+                command: SettingsCommand::Clear,
+            })
+        );
+        assert_eq!(
+            Cli::parse(["settings", "remove", "corp-nexus"])
+                .unwrap()
+                .command,
+            Command::Settings(SettingsArgs {
+                command: SettingsCommand::Remove {
+                    name: "corp-nexus".to_owned(),
+                },
+            })
+        );
     }
 
     #[test]

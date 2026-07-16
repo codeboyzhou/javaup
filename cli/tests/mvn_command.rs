@@ -50,14 +50,27 @@ impl MavenFixture {
     }
 
     fn run(&self, arguments: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_jup"))
-            .arg("mvn")
-            .args(arguments)
+        let mut command = self.command();
+        command.arg("mvn").args(arguments).output().unwrap()
+    }
+
+    fn command(&self) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_jup"));
+        command
             .current_dir(&self.working_directory)
             .env("JAVAUP_HOME", &self.javaup_home)
-            .env("NO_COLOR", "1")
-            .output()
-            .unwrap()
+            .env("NO_COLOR", "1");
+        command
+    }
+
+    fn write_settings(&self, name: &str) -> PathBuf {
+        let path = self._directory.path().join(name);
+        fs::write(
+            &path,
+            "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.0.0\"></settings>\n",
+        )
+        .unwrap();
+        path
     }
 }
 
@@ -79,7 +92,7 @@ fn write_fake_jdk(home: &Path) {
 fn write_fake_wrapper(project: &Path) {
     fs::write(
         project.join("mvnw.cmd"),
-        "@echo off\r\necho ARG1=%~1\r\necho ARG2=%~2\r\necho CWD=%CD%\r\necho JAVA_HOME=%JAVA_HOME%\r\nif \"%~1\"==\"fail\" exit /b 23\r\nexit /b 0\r\n",
+        "@echo off\r\necho ARG1=%~1\r\necho ARG2=%~2\r\necho ARG3=%~3\r\necho ARG4=%~4\r\necho CWD=%CD%\r\necho JAVA_HOME=%JAVA_HOME%\r\nif \"%~1\"==\"fail\" exit /b 23\r\nexit /b 0\r\n",
     )
     .unwrap();
 }
@@ -91,7 +104,7 @@ fn write_fake_wrapper(project: &Path) {
     let wrapper = project.join("mvnw");
     fs::write(
         &wrapper,
-        "#!/bin/sh\nprintf 'ARG1=%s\\nARG2=%s\\nCWD=%s\\nJAVA_HOME=%s\\n' \"${1-}\" \"${2-}\" \"$PWD\" \"$JAVA_HOME\"\n[ \"${1-}\" = \"fail\" ] && exit 23\nexit 0\n",
+        "#!/bin/sh\nprintf 'ARG1=%s\\nARG2=%s\\nARG3=%s\\nARG4=%s\\nCWD=%s\\nJAVA_HOME=%s\\n' \"${1-}\" \"${2-}\" \"${3-}\" \"${4-}\" \"$PWD\" \"$JAVA_HOME\"\n[ \"${1-}\" = \"fail\" ] && exit 23\nexit 0\n",
     )
     .unwrap();
     fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
@@ -117,6 +130,8 @@ fn mvn_reports_the_environment_and_forwards_arguments() {
         vec![
             "ARG1=verify".to_owned(),
             "ARG2=-DskipTests".to_owned(),
+            "ARG3=".to_owned(),
+            "ARG4=".to_owned(),
             format!("CWD={}", fixture.working_directory.display()),
             format!("JAVA_HOME={}", fixture.java_home.display()),
         ]
@@ -130,7 +145,8 @@ fn mvn_reports_the_environment_and_forwards_arguments() {
                 fixture.java_home.display(),
                 fixture.working_directory.display()
             ),
-            "[SUCCESS] Completed Maven command: mvn verify -DskipTests (JDK 17.0.1; Maven 3.9.9 from Maven Wrapper)".to_owned(),
+            "[INFO] Maven settings: Maven default".to_owned(),
+            "[SUCCESS] Completed Maven command: mvn verify -DskipTests (JDK 17.0.1; Maven 3.9.9 from Maven Wrapper; settings Maven default)".to_owned(),
         ]
     );
 }
@@ -172,7 +188,166 @@ fn mvn_reports_failures_and_preserves_the_exit_code() {
     );
     let stderr = String::from_utf8(result.stderr).unwrap();
     assert!(stderr.contains(
-        "[ERROR] Maven command failed with exit code 23: mvn fail (JDK 17.0.1; Maven 3.9.9 from Maven Wrapper)"
+        "[ERROR] Maven command failed with exit code 23: mvn fail (JDK 17.0.1; Maven 3.9.9 from Maven Wrapper; settings Maven default)"
     ));
     assert!(!stderr.contains("[SUCCESS] Completed Maven command"));
+}
+
+#[test]
+fn manages_project_settings_and_honors_command_line_overrides() {
+    let fixture = MavenFixture::new();
+    let settings_path = fixture.write_settings("nexus-settings.xml");
+    let settings_path = fs::canonicalize(settings_path).unwrap();
+
+    let registered = fixture
+        .command()
+        .args(["settings", "add", "corp-nexus"])
+        .arg(&settings_path)
+        .output()
+        .unwrap();
+    assert!(registered.status.success());
+    assert!(
+        String::from_utf8(registered.stderr)
+            .unwrap()
+            .contains("[SUCCESS] Registered Maven settings 'corp-nexus'")
+    );
+
+    let listed = fixture
+        .command()
+        .args(["settings", "list"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(listed.stdout).unwrap(),
+        format!("corp-nexus: {}\n", settings_path.display())
+    );
+
+    let bound = fixture
+        .command()
+        .args(["settings", "use", "corp-nexus"])
+        .output()
+        .unwrap();
+    assert!(bound.status.success());
+    assert!(
+        String::from_utf8(bound.stderr)
+            .unwrap()
+            .contains("[SUCCESS] Bound Maven settings 'corp-nexus'")
+    );
+
+    let project_config = fs::read_dir(fixture.javaup_home.join("projects"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    assert!(
+        fs::read_to_string(&project_config)
+            .unwrap()
+            .contains("maven.settings=corp-nexus\n")
+    );
+
+    let with_profile = fixture.run(&["verify"]);
+    assert!(with_profile.status.success());
+    assert_eq!(
+        String::from_utf8(with_profile.stdout)
+            .unwrap()
+            .lines()
+            .take(4)
+            .collect::<Vec<_>>(),
+        [
+            "ARG1=--settings".to_owned(),
+            format!("ARG2={}", settings_path.display()),
+            "ARG3=verify".to_owned(),
+            "ARG4=".to_owned(),
+        ]
+    );
+    let profile_stderr = String::from_utf8(with_profile.stderr).unwrap();
+    assert!(profile_stderr.contains(&format!(
+        "[INFO] Maven settings: profile 'corp-nexus' ({})",
+        settings_path.display()
+    )));
+    assert!(profile_stderr.contains("settings profile 'corp-nexus'"));
+
+    let project = fixture.working_directory.parent().unwrap();
+    let reinitialized = fixture
+        .command()
+        .arg("init")
+        .current_dir(project)
+        .env("JAVAUP_JDK_17_HOME", &fixture.java_home)
+        .output()
+        .unwrap();
+    assert!(reinitialized.status.success());
+    assert!(
+        fs::read_to_string(&project_config)
+            .unwrap()
+            .contains("maven.settings=corp-nexus\n")
+    );
+
+    let override_path = fixture.write_settings("override-settings.xml");
+    let overridden = fixture
+        .command()
+        .arg("mvn")
+        .arg("--settings")
+        .arg(&override_path)
+        .arg("verify")
+        .output()
+        .unwrap();
+    assert!(overridden.status.success());
+    assert_eq!(
+        String::from_utf8(overridden.stdout)
+            .unwrap()
+            .lines()
+            .take(4)
+            .collect::<Vec<_>>(),
+        [
+            "ARG1=--settings".to_owned(),
+            format!("ARG2={}", override_path.display()),
+            "ARG3=verify".to_owned(),
+            "ARG4=".to_owned(),
+        ]
+    );
+    let overridden_stderr = String::from_utf8(overridden.stderr).unwrap();
+    assert!(
+        overridden_stderr.contains(
+            "[WARNING] Command-line Maven settings override project settings 'corp-nexus'"
+        )
+    );
+    assert!(overridden_stderr.contains(&format!(
+        "[INFO] Maven settings: command line ({})",
+        override_path.display()
+    )));
+
+    let cleared = fixture
+        .command()
+        .args(["settings", "clear"])
+        .output()
+        .unwrap();
+    assert!(cleared.status.success());
+    assert!(
+        !fs::read_to_string(&project_config)
+            .unwrap()
+            .contains("maven.settings=")
+    );
+
+    let removed = fixture
+        .command()
+        .args(["settings", "remove", "corp-nexus"])
+        .output()
+        .unwrap();
+    assert!(removed.status.success());
+    assert!(
+        String::from_utf8(removed.stderr)
+            .unwrap()
+            .contains("[SUCCESS] Removed Maven settings profile 'corp-nexus'")
+    );
+
+    let empty = fixture
+        .command()
+        .args(["settings", "list"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(empty.stdout).unwrap(),
+        "No Maven settings profiles registered.\n"
+    );
 }

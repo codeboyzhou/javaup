@@ -6,6 +6,7 @@ use crate::output::Output;
 
 mod init;
 mod mvn;
+mod settings;
 mod status;
 mod version;
 
@@ -39,6 +40,9 @@ where
         Command::Init => init::execute(output).map(|_| CommandOutcome::Success),
         Command::Mvn(arguments) => {
             mvn::execute(arguments.maven_arguments, output).map(CommandOutcome::Process)
+        }
+        Command::Settings(arguments) => {
+            settings::execute(arguments.command, output).map(|_| CommandOutcome::Success)
         }
         Command::Status => status::execute(output).map(|_| CommandOutcome::Success),
         Command::Version => version::execute(output.stdout()).map(|_| CommandOutcome::Success),

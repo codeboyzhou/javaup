@@ -5,7 +5,10 @@
 #![forbid(unsafe_code)]
 
 pub mod java;
+pub mod maven_settings;
 pub mod project;
+
+mod storage;
 
 /// Product information shared by all frontends.
 pub const PRODUCT_NAME: &str = "javaup";

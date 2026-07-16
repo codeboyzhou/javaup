@@ -1,6 +1,7 @@
 use std::env;
 use std::io::{self, Write};
 
+use javaup_core::maven_settings::MavenSettingsProfile;
 use javaup_core::project::ProjectEnvironment;
 
 use crate::output::Output;
@@ -31,6 +32,19 @@ where
         "Maven version",
         format_args!("{} ({maven_source})", environment.maven().version()),
     )?;
+    match environment.maven().settings_profile() {
+        Some(name) => match MavenSettingsProfile::resolve(name) {
+            Ok(profile) => {
+                output.field("Maven settings", profile.name())?;
+                output.field("Settings path", profile.path().display())?;
+            }
+            Err(error) => {
+                output.field("Maven settings", format_args!("{name} (unavailable)"))?;
+                output.warning(error)?;
+            }
+        },
+        None => output.field("Maven settings", "Maven default")?,
+    }
     output.field("Java version", java_version)?;
     output.field("Java home", environment.java_home().display())
 }

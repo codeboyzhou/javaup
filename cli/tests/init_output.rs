@@ -163,7 +163,7 @@ fn status_reports_the_nearest_initialized_project() {
     assert_eq!(
         String::from_utf8(result.stdout).unwrap(),
         format!(
-            "Project: {}\nConfig: {}\nBuild system: maven\nMaven version: 3.9.9 (wrapper)\nJava version: 21.0.1\nJava home: {}\n",
+            "Project: {}\nConfig: {}\nBuild system: maven\nMaven version: 3.9.9 (wrapper)\nMaven settings: Maven default\nJava version: 21.0.1\nJava home: {}\n",
             project.display(),
             configuration_path.display(),
             java_home.display()

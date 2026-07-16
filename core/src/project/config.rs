@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::env;
 use std::error::Error;
 use std::fmt;
 use std::fs;
@@ -10,9 +9,12 @@ use sha2::{Digest, Sha256};
 
 use super::{MavenEnvironment, ProjectEnvironment, ProjectType, is_maven_version};
 use crate::java::JdkInstallation;
+use crate::maven_settings::is_valid_profile_name;
+use crate::storage;
 
 const PROJECTS_DIRECTORY_NAME: &str = "projects";
 const ENVIRONMENT_FILE_EXTENSION: &str = "properties";
+const MAVEN_SETTINGS_KEY: &str = "maven.settings";
 
 /// Error raised while loading or saving a project environment.
 #[derive(Debug)]
@@ -114,10 +116,55 @@ pub(super) fn save(
     save_in(&storage_directory()?, project_dir, environment)
 }
 
+pub(super) fn save_preserving_maven_settings(
+    project_dir: &Path,
+    environment: &ProjectEnvironment,
+) -> Result<PathBuf, ProjectConfigError> {
+    let storage_directory = storage_directory()?;
+    save_preserving_maven_settings_in(&storage_directory, project_dir, environment)
+}
+
+fn save_preserving_maven_settings_in(
+    storage_directory: &Path,
+    project_dir: &Path,
+    environment: &ProjectEnvironment,
+) -> Result<PathBuf, ProjectConfigError> {
+    let path = environment_path(storage_directory, project_dir)?;
+    let existing_profile = path
+        .is_file()
+        .then(|| load_path(&path).ok())
+        .flatten()
+        .and_then(|environment| environment.maven.settings_profile);
+    save_in_with_settings(
+        storage_directory,
+        project_dir,
+        environment,
+        environment
+            .maven
+            .settings_profile
+            .as_deref()
+            .or(existing_profile.as_deref()),
+    )
+}
+
 fn save_in(
     storage_directory: &Path,
     project_dir: &Path,
     environment: &ProjectEnvironment,
+) -> Result<PathBuf, ProjectConfigError> {
+    save_in_with_settings(
+        storage_directory,
+        project_dir,
+        environment,
+        environment.maven.settings_profile.as_deref(),
+    )
+}
+
+fn save_in_with_settings(
+    storage_directory: &Path,
+    project_dir: &Path,
+    environment: &ProjectEnvironment,
+    settings_profile: Option<&str>,
 ) -> Result<PathBuf, ProjectConfigError> {
     let path = environment_path(storage_directory, project_dir)?;
     let absolute_project_dir = std::path::absolute(project_dir).map_err(|source| {
@@ -126,7 +173,7 @@ fn save_in(
             source,
         }
     })?;
-    let contents = format!(
+    let mut contents = format!(
         "project.path={}\nproject.type={}\njava.version={}\njava.home={}\nmaven.version={}\nmaven.wrapper={}\n",
         absolute_project_dir.display(),
         environment.project_type.as_str(),
@@ -135,6 +182,9 @@ fn save_in(
         environment.maven.version,
         environment.maven.uses_wrapper
     );
+    if let Some(settings_profile) = settings_profile {
+        contents.push_str(&format!("{MAVEN_SETTINGS_KEY}={settings_profile}\n"));
+    }
     fs::create_dir_all(path.parent().expect("environment path must have a parent")).map_err(
         |source| ProjectConfigError::Write {
             path: path.clone(),
@@ -195,12 +245,23 @@ fn load_path(path: &Path) -> Result<ProjectEnvironment, ProjectConfigError> {
         .parse::<bool>()
         .map_err(|_| invalid_value(path, "maven.wrapper", wrapper_value))?;
 
+    let settings_profile = values
+        .get(MAVEN_SETTINGS_KEY)
+        .map(String::as_str)
+        .map(|name| {
+            is_valid_profile_name(name)
+                .then(|| name.to_owned())
+                .ok_or_else(|| invalid_value(path, MAVEN_SETTINGS_KEY, name))
+        })
+        .transpose()?;
+
     Ok(ProjectEnvironment {
         project_type: ProjectType::Maven,
         java: JdkInstallation::recorded(java_version, java_home),
         maven: MavenEnvironment {
             version: maven_version.to_owned(),
             uses_wrapper,
+            settings_profile,
         },
     })
 }
@@ -270,52 +331,7 @@ fn project_identity(path: &Path) -> String {
 }
 
 fn storage_directory() -> Result<PathBuf, ProjectConfigError> {
-    if let Some(path) = env::var_os("JAVAUP_HOME").filter(|path| !path.is_empty()) {
-        return Ok(PathBuf::from(path));
-    }
-
-    platform_storage_directory().ok_or(ProjectConfigError::StorageDirectoryUnavailable)
-}
-
-#[cfg(windows)]
-fn platform_storage_directory() -> Option<PathBuf> {
-    env::var_os("APPDATA")
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-        .map(|path| path.join(crate::PRODUCT_NAME))
-}
-
-#[cfg(target_os = "macos")]
-fn platform_storage_directory() -> Option<PathBuf> {
-    env::var_os("HOME")
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-        .map(|path| {
-            path.join("Library")
-                .join("Application Support")
-                .join(crate::PRODUCT_NAME)
-        })
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn platform_storage_directory() -> Option<PathBuf> {
-    if let Some(path) = env::var_os("XDG_CONFIG_HOME")
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-    {
-        return Some(path.join(crate::PRODUCT_NAME));
-    }
-
-    env::var_os("HOME")
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-        .map(|path| path.join(".config").join(crate::PRODUCT_NAME))
-}
-
-#[cfg(not(any(windows, unix)))]
-fn platform_storage_directory() -> Option<PathBuf> {
-    None
+    storage::directory().ok_or(ProjectConfigError::StorageDirectoryUnavailable)
 }
 
 fn parse_entries(
@@ -389,6 +405,7 @@ mod tests {
             maven: MavenEnvironment {
                 version: "3.9.9".to_owned(),
                 uses_wrapper: true,
+                settings_profile: None,
             },
         }
     }
@@ -482,6 +499,50 @@ mod tests {
         assert_ne!(
             environment_path(storage.path(), &first).unwrap(),
             environment_path(storage.path(), &second).unwrap()
+        );
+    }
+
+    #[test]
+    fn saves_loads_clears_and_preserves_maven_settings_bindings() {
+        let project = tempfile::tempdir().unwrap();
+        let storage = tempfile::tempdir().unwrap();
+        let mut configured = environment(project.path(), 17);
+        configured.maven.settings_profile = Some("corp-nexus".to_owned());
+
+        let path = save_in(storage.path(), project.path(), &configured).unwrap();
+        assert_eq!(
+            load_in(storage.path(), project.path())
+                .unwrap()
+                .maven()
+                .settings_profile(),
+            Some("corp-nexus")
+        );
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("maven.settings=corp-nexus\n")
+        );
+
+        let detected_again = environment(project.path(), 21);
+        save_preserving_maven_settings_in(storage.path(), project.path(), &detected_again).unwrap();
+        let preserved = load_in(storage.path(), project.path()).unwrap();
+        assert_eq!(preserved.java_version(), 21);
+        assert_eq!(preserved.maven().settings_profile(), Some("corp-nexus"));
+
+        let mut cleared = preserved;
+        cleared.maven.settings_profile = None;
+        save_in(storage.path(), project.path(), &cleared).unwrap();
+        assert_eq!(
+            load_in(storage.path(), project.path())
+                .unwrap()
+                .maven()
+                .settings_profile(),
+            None
+        );
+        assert!(
+            !fs::read_to_string(path)
+                .unwrap()
+                .contains("maven.settings=")
         );
     }
 }

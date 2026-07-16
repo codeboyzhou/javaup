@@ -170,6 +170,7 @@ where
         return Ok(MavenEnvironment {
             version,
             uses_wrapper: true,
+            settings_profile: None,
         });
     }
 
@@ -196,6 +197,7 @@ where
     Ok(MavenEnvironment {
         version,
         uses_wrapper: false,
+        settings_profile: None,
     })
 }
 

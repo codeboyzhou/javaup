@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::java::{JdkInstallation, JdkValidationError};
+use crate::maven_settings::MavenSettingsProfile;
 
 mod build;
 mod config;
@@ -48,6 +49,7 @@ impl ProjectType {
 pub struct MavenEnvironment {
     version: String,
     uses_wrapper: bool,
+    settings_profile: Option<String>,
 }
 
 impl MavenEnvironment {
@@ -57,6 +59,11 @@ impl MavenEnvironment {
 
     pub fn uses_wrapper(&self) -> bool {
         self.uses_wrapper
+    }
+
+    /// Returns the named Maven settings profile bound to this project.
+    pub fn settings_profile(&self) -> Option<&str> {
+        self.settings_profile.as_deref()
     }
 }
 
@@ -108,6 +115,19 @@ impl ProjectEnvironment {
     /// Saves this environment in javaup's user-level configuration directory.
     pub fn save(&self, project_dir: impl AsRef<Path>) -> Result<PathBuf, ProjectConfigError> {
         config::save(project_dir.as_ref(), self)
+    }
+
+    /// Saves this environment while retaining an existing Maven settings binding.
+    pub fn save_preserving_maven_settings(
+        &self,
+        project_dir: impl AsRef<Path>,
+    ) -> Result<PathBuf, ProjectConfigError> {
+        config::save_preserving_maven_settings(project_dir.as_ref(), self)
+    }
+
+    /// Binds or clears a registered Maven settings profile for this project.
+    pub fn set_maven_settings(&mut self, profile: Option<&MavenSettingsProfile>) {
+        self.maven.settings_profile = profile.map(|profile| profile.name().to_owned());
     }
 
     pub fn project_type(&self) -> ProjectType {

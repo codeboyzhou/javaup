@@ -168,6 +168,7 @@ mod tests {
             maven: MavenEnvironment {
                 version: "3.9.9".to_owned(),
                 uses_wrapper: true,
+                settings_profile: None,
             },
         };
 
