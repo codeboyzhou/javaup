@@ -10,6 +10,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
+use crate::executable;
+
 /// A validated JDK installation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct JdkInstallation {
@@ -222,12 +224,12 @@ fn inspect_home_with_version(
     }
 
     let java = home.join("bin").join(executable_name("java"));
-    if !java.is_file() {
+    if !executable::is_usable(&java) {
         return Err(JdkValidationError::JavaNotFound { path: java });
     }
 
     let compiler = home.join("bin").join(executable_name("javac"));
-    if !compiler.is_file() {
+    if !executable::is_usable(&compiler) {
         return Err(JdkValidationError::CompilerNotFound { path: compiler });
     }
 
@@ -382,12 +384,41 @@ fn push_homes_under_root(candidates: &mut CandidateHomes, root: &Path) {
         return;
     };
     let mut entries: Vec<_> = entries.flatten().map(|entry| entry.path()).collect();
-    entries.sort();
+    entries.sort_by(|left, right| {
+        numeric_path_components(right)
+            .cmp(&numeric_path_components(left))
+            .then_with(|| right.cmp(left))
+    });
     for entry in entries {
         candidates.push(&entry);
         candidates.push(entry.join("current"));
         candidates.push(entry.join("Contents").join("Home"));
     }
+}
+
+fn numeric_path_components(path: &Path) -> Vec<u64> {
+    let mut components = Vec::new();
+    let mut value = 0_u64;
+    let mut in_number = false;
+    for character in path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .chars()
+    {
+        if let Some(digit) = character.to_digit(10) {
+            value = value.saturating_mul(10).saturating_add(u64::from(digit));
+            in_number = true;
+        } else if in_number {
+            components.push(value);
+            value = 0;
+            in_number = false;
+        }
+    }
+    if in_number {
+        components.push(value);
+    }
+    components
 }
 
 #[derive(Default)]
@@ -496,6 +527,12 @@ mod tests {
         .unwrap();
         fs::write(bin.join(executable_name("java")), "").unwrap();
         fs::write(bin.join(executable_name("javac")), "").unwrap();
+        #[cfg(unix)]
+        for executable in [executable_name("java"), executable_name("javac")] {
+            use std::os::unix::fs::PermissionsExt;
+
+            fs::set_permissions(bin.join(executable), fs::Permissions::from_mode(0o755)).unwrap();
+        }
     }
 
     #[test]
@@ -557,5 +594,27 @@ mod tests {
             .unwrap();
 
         assert_eq!(installation.home(), expected_home);
+    }
+
+    #[test]
+    fn searches_newer_patch_releases_before_older_ones() {
+        let directory = tempfile::tempdir().unwrap();
+        for name in ["jdk-17.0.9", "jdk-17.0.10"] {
+            fs::create_dir(directory.path().join(name)).unwrap();
+        }
+        let mut candidates = CandidateHomes::default();
+
+        push_homes_under_root(&mut candidates, directory.path());
+
+        let homes = candidates.values;
+        let newer = homes
+            .iter()
+            .position(|path| path.ends_with("jdk-17.0.10"))
+            .unwrap();
+        let older = homes
+            .iter()
+            .position(|path| path.ends_with("jdk-17.0.9"))
+            .unwrap();
+        assert!(newer < older);
     }
 }

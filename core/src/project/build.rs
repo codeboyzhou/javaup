@@ -3,10 +3,11 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus};
+use std::process::ExitStatus;
 
 use super::{ProjectEnvironment, maven};
 use crate::java::JdkValidationError;
+use crate::process::{ProcessInvocation, ProcessRunner};
 
 /// Error raised while preparing a project build command.
 #[derive(Debug)]
@@ -19,6 +20,9 @@ pub enum ProjectBuildError {
         project_dir: PathBuf,
     },
     MavenCommandUnavailable,
+    UnsupportedBuildTool {
+        actual: &'static str,
+    },
     MavenConfigurationRead {
         path: PathBuf,
         source: io::Error,
@@ -57,6 +61,12 @@ impl fmt::Display for ProjectBuildError {
             ),
             Self::MavenCommandUnavailable => {
                 write!(formatter, "Maven is not available on PATH")
+            }
+            Self::UnsupportedBuildTool { actual } => {
+                write!(
+                    formatter,
+                    "cannot create a Maven invocation for a {actual} project"
+                )
             }
             Self::MavenConfigurationRead { path, source } => write!(
                 formatter,
@@ -109,34 +119,42 @@ impl Error for ProjectBuildError {
     }
 }
 
-pub(super) fn maven_command<I, S>(
+pub(super) fn maven_invocation<I, S, R>(
     project_dir: &Path,
     environment: &ProjectEnvironment,
     arguments: I,
-) -> Result<Command, ProjectBuildError>
+    runner: &R,
+) -> Result<ProcessInvocation, ProjectBuildError>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
+    R: ProcessRunner + ?Sized,
 {
     environment
         .java
         .validate()
         .map_err(|source| ProjectBuildError::InvalidJdk { source })?;
 
-    let executable = validate_maven(project_dir, environment)?;
-
-    let mut command = Command::new(executable);
-    command.args(arguments).current_dir(project_dir);
-    maven::configure_java(&mut command, environment.java.home())
-        .map_err(|source| ProjectBuildError::InvalidPath { source })?;
-    Ok(command)
+    let executable = validate_maven(project_dir, environment, runner)?;
+    let arguments = arguments
+        .into_iter()
+        .map(|argument| argument.as_ref().to_owned())
+        .collect::<Vec<_>>();
+    maven::invocation(&executable, project_dir, environment.java.home(), arguments)
+        .map_err(|source| ProjectBuildError::InvalidPath { source })
 }
 
 fn validate_maven(
     project_dir: &Path,
     environment: &ProjectEnvironment,
+    runner: &(impl ProcessRunner + ?Sized),
 ) -> Result<PathBuf, ProjectBuildError> {
-    if environment.maven.uses_wrapper {
+    let maven_environment = environment
+        .maven()
+        .ok_or(ProjectBuildError::UnsupportedBuildTool {
+            actual: environment.build_tool().as_str(),
+        })?;
+    if maven_environment.uses_wrapper {
         let executable = maven::find_wrapper(project_dir).ok_or_else(|| {
             ProjectBuildError::MavenWrapperNotFound {
                 project_dir: project_dir.to_owned(),
@@ -151,39 +169,40 @@ fn validate_maven(
             .ok_or(ProjectBuildError::MavenVersionNotFound {
                 path: properties_path,
             })?;
-        ensure_version_matches(&executable, &environment.maven.version, actual)?;
+        ensure_version_matches(&executable, &maven_environment.version, actual)?;
         return Ok(executable);
     }
 
     let executable =
         maven::find_maven_on_path().ok_or(ProjectBuildError::MavenCommandUnavailable)?;
-    let output = maven::run_maven_version(&executable, project_dir, environment.java.home())
-        .map_err(|error| match error {
-            maven::MavenProbeError::Command(source) => ProjectBuildError::MavenVersionCommand {
-                path: executable.clone(),
-                source,
-            },
-            maven::MavenProbeError::InvalidPath(source) => {
-                ProjectBuildError::InvalidPath { source }
-            }
-        })?;
-    if !output.status.success() {
+    let output =
+        maven::run_maven_version(runner, &executable, project_dir, environment.java.home())
+            .map_err(|error| match error {
+                maven::MavenProbeError::Command(source) => ProjectBuildError::MavenVersionCommand {
+                    path: executable.clone(),
+                    source,
+                },
+                maven::MavenProbeError::InvalidPath(source) => {
+                    ProjectBuildError::InvalidPath { source }
+                }
+            })?;
+    if !output.status().success() {
         return Err(ProjectBuildError::MavenVersionCommandFailed {
             path: executable,
-            status: output.status,
+            status: output.status(),
         });
     }
     let combined = format!(
         "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+        String::from_utf8_lossy(output.stdout()),
+        String::from_utf8_lossy(output.stderr())
     );
     let actual = maven::parse_maven_version_output(&combined).ok_or_else(|| {
         ProjectBuildError::MavenVersionNotFound {
             path: executable.clone(),
         }
     })?;
-    ensure_version_matches(&executable, &environment.maven.version, actual)?;
+    ensure_version_matches(&executable, &maven_environment.version, actual)?;
     Ok(executable)
 }
 
@@ -208,7 +227,8 @@ mod tests {
 
     use super::*;
     use crate::java::JdkInstallation;
-    use crate::project::{MavenEnvironment, ProjectType};
+    use crate::process::SystemProcessRunner;
+    use crate::project::{BuildToolEnvironment, MavenEnvironment};
 
     #[test]
     fn prepares_a_wrapper_command_with_the_recorded_jdk() {
@@ -231,6 +251,16 @@ mod tests {
             "",
         )
         .unwrap();
+        #[cfg(unix)]
+        for executable in ["java", "javac"] {
+            use std::os::unix::fs::PermissionsExt;
+
+            fs::set_permissions(
+                java_home.join("bin").join(executable),
+                fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+        }
 
         let wrapper = directory
             .path()
@@ -250,28 +280,33 @@ mod tests {
         )
         .unwrap();
         let environment = ProjectEnvironment {
-            project_type: ProjectType::Maven,
             java: JdkInstallation::recorded(17, java_home.clone()),
-            maven: MavenEnvironment {
+            build_tool: BuildToolEnvironment::Maven(MavenEnvironment {
                 version: "3.9.9".to_owned(),
                 uses_wrapper: true,
                 settings_profile: None,
-            },
+            }),
         };
 
-        let command = maven_command(directory.path(), &environment, ["clean", "package"]).unwrap();
+        let invocation = maven_invocation(
+            directory.path(),
+            &environment,
+            ["clean", "package"],
+            &SystemProcessRunner,
+        )
+        .unwrap();
 
-        assert_eq!(command.get_program(), wrapper.as_os_str());
-        assert_eq!(command.get_current_dir(), Some(directory.path()));
+        assert_eq!(invocation.program(), wrapper.as_path());
+        assert_eq!(invocation.current_dir(), directory.path());
         assert_eq!(
-            command
-                .get_envs()
+            invocation
+                .environment()
                 .find(|(key, _)| *key == OsStr::new("JAVA_HOME"))
-                .and_then(|(_, value)| value),
+                .map(|(_, value)| value),
             Some(java_home.as_os_str())
         );
         assert_eq!(
-            command.get_args().collect::<Vec<_>>(),
+            invocation.arguments().collect::<Vec<_>>(),
             vec![OsStr::new("clean"), OsStr::new("package")]
         );
     }

@@ -6,11 +6,11 @@ fn main() -> ExitCode {
     let mut stdout = stdout.lock();
     let mut stderr = stderr.lock();
 
-    let code = cli::run_with_options(
+    let code = javaup_cli::run_with_options(
         std::env::args_os().skip(1),
         &mut stdout,
         &mut stderr,
-        cli::OutputOptions::styled(),
+        javaup_cli::OutputOptions::styled(),
     );
     ExitCode::from(code)
 }

@@ -1,34 +1,38 @@
 use std::env;
 use std::ffi::OsString;
-use std::io::{self, Write};
+use std::io::Write;
 use std::process::ExitStatus;
 
 use javaup_core::maven_settings::MavenSettingsProfile;
 use javaup_core::project::ProjectEnvironment;
 
+use super::CommandError;
 use crate::output::Output;
 
 pub(super) fn execute<Stdout, Stderr>(
     maven_arguments: Vec<OsString>,
     output: &mut Output<'_, Stdout, Stderr>,
-) -> io::Result<ExitStatus>
+) -> Result<ExitStatus, CommandError>
 where
     Stdout: Write,
     Stderr: Write,
 {
     let current_dir = env::current_dir()?;
-    let (project_dir, environment) =
-        ProjectEnvironment::load_nearest(&current_dir).map_err(io::Error::other)?;
-    let java_version = environment
-        .installed_java_version()
-        .map_err(io::Error::other)?;
-    let maven_source = if environment.maven().uses_wrapper() {
+    let (project_dir, environment) = ProjectEnvironment::load_nearest(&current_dir)?;
+    let java_version = environment.installed_java_version()?;
+    let maven = environment
+        .maven()
+        .ok_or(CommandError::UnsupportedBuildTool {
+            expected: "maven",
+            actual: environment.build_tool().as_str(),
+        })?;
+    let maven_source = if maven.uses_wrapper() {
         "Maven Wrapper"
     } else {
         "PATH"
     };
     let explicit_settings = find_explicit_settings(&maven_arguments);
-    let settings_profile_name = environment.maven().settings_profile();
+    let settings_profile_name = maven.settings_profile();
     if explicit_settings.is_some()
         && let Some(profile_name) = settings_profile_name
     {
@@ -40,9 +44,7 @@ where
     let settings_selection = match explicit_settings {
         Some(settings) => SettingsSelection::CommandLine(settings),
         None => match settings_profile_name {
-            Some(name) => SettingsSelection::Project(
-                MavenSettingsProfile::resolve(name).map_err(io::Error::other)?,
-            ),
+            Some(name) => SettingsSelection::Project(MavenSettingsProfile::resolve(name)?),
             None => SettingsSelection::Default,
         },
     };
@@ -54,26 +56,26 @@ where
     output.info(format_args!(
         "Environment: JDK {java_version} at {}; Maven {} from {maven_source}; directory {}",
         environment.java_home().display(),
-        environment.maven().version(),
+        maven.version(),
         current_dir.display()
     ))?;
     output.info(format_args!("Maven settings: {settings_summary}"))?;
 
-    let mut command = environment
-        .maven_command(&project_dir, maven_arguments)
-        .map_err(io::Error::other)?;
-    let status = command.current_dir(current_dir).status()?;
+    let invocation = environment
+        .maven_invocation(&project_dir, maven_arguments)?
+        .with_current_dir(current_dir);
+    let status = crate::process::status(&invocation)?;
 
     if status.success() {
         output.success(format_args!(
             "Completed Maven command: {command_line} (JDK {java_version}; Maven {} from {maven_source}; settings {settings_summary})",
-            environment.maven().version(),
+            maven.version(),
         ))?;
     } else {
         output.error(format_args!(
             "Maven command failed with {}: {command_line} (JDK {java_version}; Maven {} from {maven_source}; settings {settings_summary})",
             exit_description(status),
-            environment.maven().version(),
+            maven.version(),
         ))?;
     }
 

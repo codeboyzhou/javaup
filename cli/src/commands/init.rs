@@ -3,9 +3,12 @@ use std::io::{self, Write};
 
 use javaup_core::project::{ProjectDetectionEvent, ProjectEnvironment};
 
+use super::CommandError;
 use crate::output::Output;
 
-pub(super) fn execute<Stdout, Stderr>(output: &mut Output<'_, Stdout, Stderr>) -> io::Result<()>
+pub(super) fn execute<Stdout, Stderr>(
+    output: &mut Output<'_, Stdout, Stderr>,
+) -> Result<(), CommandError>
 where
     Stdout: Write,
     Stderr: Write,
@@ -17,15 +20,19 @@ where
             reporting_error = report_detection_event(output, event).err();
         }
     });
-    let environment = environment.map_err(io::Error::other)?;
+    let environment = environment?;
     if let Some(error) = reporting_error {
-        return Err(error);
+        return Err(error.into());
     }
 
     output.info("Saving the detected project environment")?;
-    let config_path = environment
-        .save_preserving_maven_settings(&project_dir)
-        .map_err(io::Error::other)?;
+    let config_path = environment.save_preserving_maven_settings(&project_dir)?;
+    let maven = environment
+        .maven()
+        .ok_or(CommandError::UnsupportedBuildTool {
+            expected: "maven",
+            actual: environment.build_tool().as_str(),
+        })?;
 
     writeln!(
         output.stdout(),
@@ -33,11 +40,11 @@ where
         config_path.display(),
         environment.java_version(),
         environment.java_home().display(),
-        environment.maven().version(),
-        environment.maven().uses_wrapper()
+        maven.version(),
+        maven.uses_wrapper()
     )?;
     output.stdout().flush()?;
-    output.success("Project environment initialized")
+    Ok(output.success("Project environment initialized")?)
 }
 
 fn report_detection_event<Stdout, Stderr>(

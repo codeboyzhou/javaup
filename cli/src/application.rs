@@ -38,12 +38,18 @@ where
         Ok(cli) => cli,
         Err(error) => {
             if error.use_stderr() {
-                let _ = write!(stderr, "{error}");
-                return EXIT_USAGE;
+                return if write!(stderr, "{error}").is_ok() {
+                    EXIT_USAGE
+                } else {
+                    EXIT_FAILURE
+                };
             }
 
-            let _ = write!(stdout, "{error}");
-            return EXIT_SUCCESS;
+            return if write!(stdout, "{error}").is_ok() {
+                EXIT_SUCCESS
+            } else {
+                EXIT_FAILURE
+            };
         }
     };
 
@@ -153,5 +159,28 @@ mod tests {
             format!("{} {}\n", "jup", env!("JAVAUP_CLI_VERSION"))
         );
         assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn reports_failure_when_help_cannot_be_written() {
+        let mut stdout = FailingWriter;
+        let mut stderr = Vec::new();
+
+        let code = run(["--help"], &mut stdout, &mut stderr);
+
+        assert_eq!(code, EXIT_FAILURE);
+        assert!(stderr.is_empty());
+    }
+
+    struct FailingWriter;
+
+    impl Write for FailingWriter {
+        fn write(&mut self, _buffer: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("write failed"))
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Err(std::io::Error::other("flush failed"))
+        }
     }
 }

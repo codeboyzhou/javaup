@@ -84,7 +84,14 @@ fn write_fake_jdk(home: &Path) {
         } else {
             executable.to_owned()
         };
-        fs::write(bin.join(executable), "").unwrap();
+        let path = bin.join(executable);
+        fs::write(&path, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
     }
 }
 

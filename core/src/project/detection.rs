@@ -6,8 +6,11 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 
-use super::{MavenEnvironment, ProjectDetectionEvent, ProjectEnvironment, ProjectType, maven};
+use super::{
+    BuildToolEnvironment, MavenEnvironment, ProjectDetectionEvent, ProjectEnvironment, maven,
+};
 use crate::java::{JdkDiscoveryError, JdkInstallation, parse_java_major};
+use crate::process::ProcessRunner;
 
 const POM_FILE_NAME: &str = "pom.xml";
 
@@ -108,12 +111,14 @@ impl Error for ProjectDetectionError {
     }
 }
 
-pub(super) fn detect<F>(
+pub(super) fn detect<F, R>(
     project_dir: &Path,
+    runner: &R,
     observer: &mut F,
 ) -> Result<ProjectEnvironment, ProjectDetectionError>
 where
     F: FnMut(ProjectDetectionEvent),
+    R: ProcessRunner + ?Sized,
 {
     observer(ProjectDetectionEvent::InspectingProject {
         project_dir: project_dir.to_owned(),
@@ -143,21 +148,22 @@ where
         major_version: java.major_version(),
         home: java.home().to_owned(),
     });
-    let maven = detect_maven(project_dir, &java, observer)?;
+    let maven = detect_maven(project_dir, &java, runner, observer)?;
     Ok(ProjectEnvironment {
-        project_type: ProjectType::Maven,
         java,
-        maven,
+        build_tool: BuildToolEnvironment::Maven(maven),
     })
 }
 
-fn detect_maven<F>(
+fn detect_maven<F, R>(
     project_dir: &Path,
     java: &JdkInstallation,
+    runner: &R,
     observer: &mut F,
 ) -> Result<MavenEnvironment, ProjectDetectionError>
 where
     F: FnMut(ProjectDetectionEvent),
+    R: ProcessRunner + ?Sized,
 {
     let wrapper_properties = maven::wrapper_properties_path(project_dir);
     if wrapper_properties.is_file() {
@@ -196,22 +202,21 @@ where
             source: io::Error::new(io::ErrorKind::NotFound, "Maven is not available on PATH"),
         }
     })?;
-    let output =
-        maven::run_maven_version(&executable, project_dir, java.home()).map_err(|error| {
-            ProjectDetectionError::MavenCommandUnavailable {
-                source: error.command_source(),
-            }
-        })?;
-    if !output.status.success() {
+    let output = maven::run_maven_version(runner, &executable, project_dir, java.home()).map_err(
+        |error| ProjectDetectionError::MavenCommandUnavailable {
+            source: error.command_source(),
+        },
+    )?;
+    if !output.status().success() {
         return Err(ProjectDetectionError::MavenCommandFailed {
-            status: output.status,
+            status: output.status(),
         });
     }
 
     let combined = format!(
         "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+        String::from_utf8_lossy(output.stdout()),
+        String::from_utf8_lossy(output.stderr())
     );
     let version = maven::parse_maven_version_output(&combined)
         .ok_or(ProjectDetectionError::MavenVersionNotFound)?;
@@ -420,6 +425,7 @@ fn read_to_string(path: &Path) -> Result<String, ProjectDetectionError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::process::SystemProcessRunner;
 
     #[test]
     fn parses_java_major_versions() {
@@ -595,7 +601,13 @@ mod tests {
         );
         let mut events = Vec::new();
         let java = JdkInstallation::recorded(8, directory.path().join("jdk-8"));
-        let maven = detect_maven(directory.path(), &java, &mut |event| events.push(event)).unwrap();
+        let maven = detect_maven(
+            directory.path(),
+            &java,
+            &SystemProcessRunner,
+            &mut |event| events.push(event),
+        )
+        .unwrap();
         assert_eq!(maven.version(), "3.9.9");
         assert!(maven.uses_wrapper());
         assert_eq!(
@@ -628,7 +640,7 @@ mod tests {
         let java = JdkInstallation::recorded(17, directory.path().join("jdk-17"));
 
         assert!(matches!(
-            detect_maven(directory.path(), &java, &mut |_| {}),
+            detect_maven(directory.path(), &java, &SystemProcessRunner, &mut |_| {}),
             Err(ProjectDetectionError::MavenWrapperNotFound { .. })
         ));
     }

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-use super::{MavenEnvironment, ProjectEnvironment, ProjectType, is_maven_version};
+use super::{BuildToolEnvironment, MavenEnvironment, ProjectEnvironment, is_maven_version};
 use crate::java::JdkInstallation;
 use crate::maven_settings::is_valid_profile_name;
 use crate::storage;
@@ -141,7 +141,9 @@ fn save_preserving_maven_settings_in(
         source,
     })?;
     let existing_profile = if path.is_file() {
-        load_path(&path, Some(project_dir))?.maven.settings_profile
+        load_path(&path, Some(project_dir))?
+            .maven()
+            .and_then(|maven| maven.settings_profile.clone())
     } else {
         None
     };
@@ -150,9 +152,8 @@ fn save_preserving_maven_settings_in(
         project_dir,
         environment,
         environment
-            .maven
-            .settings_profile
-            .as_deref()
+            .maven()
+            .and_then(MavenEnvironment::settings_profile)
             .or(existing_profile.as_deref()),
     )?;
     Ok(path)
@@ -167,7 +168,9 @@ fn save_in(
         storage_directory,
         project_dir,
         environment,
-        environment.maven.settings_profile.as_deref(),
+        environment
+            .maven()
+            .and_then(MavenEnvironment::settings_profile),
     )
 }
 
@@ -197,14 +200,15 @@ fn write_environment(
             path: project_dir.to_owned(),
             source,
         })?;
+    let BuildToolEnvironment::Maven(maven) = environment.build_tool();
     let mut contents = format!(
         "{SCHEMA_VERSION_KEY}={CURRENT_SCHEMA_VERSION}\n{PROJECT_PATH_HEX_KEY}={}\nproject.type={}\njava.version={}\n{JAVA_HOME_HEX_KEY}={}\nmaven.version={}\nmaven.wrapper={}\n",
         storage::encode_path(&absolute_project_dir),
-        environment.project_type.as_str(),
+        environment.build_tool().as_str(),
         environment.java.major_version(),
         storage::encode_path(environment.java.home()),
-        environment.maven.version,
-        environment.maven.uses_wrapper
+        maven.version,
+        maven.uses_wrapper
     );
     if let Some(settings_profile) = settings_profile {
         contents.push_str(&format!("{MAVEN_SETTINGS_KEY}={settings_profile}\n"));
@@ -346,13 +350,12 @@ fn load_path(
         .transpose()?;
 
     Ok(ProjectEnvironment {
-        project_type: ProjectType::Maven,
         java: JdkInstallation::recorded(java_version, java_home),
-        maven: MavenEnvironment {
+        build_tool: BuildToolEnvironment::Maven(MavenEnvironment {
             version: maven_version.to_owned(),
             uses_wrapper,
             settings_profile,
-        },
+        }),
     })
 }
 
@@ -492,16 +495,15 @@ mod tests {
 
     fn environment(project_dir: &Path, java_version: u32) -> ProjectEnvironment {
         ProjectEnvironment {
-            project_type: ProjectType::Maven,
             java: JdkInstallation::recorded(
                 java_version,
                 project_dir.join(format!("jdk-{java_version}")),
             ),
-            maven: MavenEnvironment {
+            build_tool: BuildToolEnvironment::Maven(MavenEnvironment {
                 version: "3.9.9".to_owned(),
                 uses_wrapper: true,
                 settings_profile: None,
-            },
+            }),
         }
     }
 
@@ -684,14 +686,15 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let storage = tempfile::tempdir().unwrap();
         let mut configured = environment(project.path(), 17);
-        configured.maven.settings_profile = Some("corp-nexus".to_owned());
+        let BuildToolEnvironment::Maven(maven) = &mut configured.build_tool;
+        maven.settings_profile = Some("corp-nexus".to_owned());
 
         let path = save_in(storage.path(), project.path(), &configured).unwrap();
         assert_eq!(
             load_in(storage.path(), project.path())
                 .unwrap()
                 .maven()
-                .settings_profile(),
+                .and_then(MavenEnvironment::settings_profile),
             Some("corp-nexus")
         );
         assert!(
@@ -704,16 +707,22 @@ mod tests {
         save_preserving_maven_settings_in(storage.path(), project.path(), &detected_again).unwrap();
         let preserved = load_in(storage.path(), project.path()).unwrap();
         assert_eq!(preserved.java_version(), 21);
-        assert_eq!(preserved.maven().settings_profile(), Some("corp-nexus"));
+        assert_eq!(
+            preserved
+                .maven()
+                .and_then(MavenEnvironment::settings_profile),
+            Some("corp-nexus")
+        );
 
         let mut cleared = preserved;
-        cleared.maven.settings_profile = None;
+        let BuildToolEnvironment::Maven(maven) = &mut cleared.build_tool;
+        maven.settings_profile = None;
         save_in(storage.path(), project.path(), &cleared).unwrap();
         assert_eq!(
             load_in(storage.path(), project.path())
                 .unwrap()
                 .maven()
-                .settings_profile(),
+                .and_then(MavenEnvironment::settings_profile),
             None
         );
         assert!(

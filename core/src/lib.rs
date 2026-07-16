@@ -4,8 +4,10 @@
 
 #![forbid(unsafe_code)]
 
+mod executable;
 pub mod java;
 pub mod maven_settings;
+pub mod process;
 pub mod project;
 
 mod storage;

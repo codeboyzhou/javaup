@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::java::{JdkInstallation, JdkValidationError};
 use crate::maven_settings::MavenSettingsProfile;
+use crate::process::{ProcessInvocation, ProcessRunner, SystemProcessRunner};
 
 mod build;
 mod config;
@@ -68,18 +69,48 @@ impl MavenEnvironment {
     }
 }
 
+/// Build-tool-specific state required to reproduce a project build.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum BuildToolEnvironment {
+    Maven(MavenEnvironment),
+}
+
+impl BuildToolEnvironment {
+    pub fn project_type(&self) -> ProjectType {
+        match self {
+            Self::Maven(_) => ProjectType::Maven,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        self.project_type().as_str()
+    }
+
+    pub fn as_maven(&self) -> Option<&MavenEnvironment> {
+        match self {
+            Self::Maven(environment) => Some(environment),
+        }
+    }
+
+    fn as_maven_mut(&mut self) -> Option<&mut MavenEnvironment> {
+        match self {
+            Self::Maven(environment) => Some(environment),
+        }
+    }
+}
+
 /// Reproducible build environment detected for a project.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectEnvironment {
-    project_type: ProjectType,
     java: JdkInstallation,
-    maven: MavenEnvironment,
+    build_tool: BuildToolEnvironment,
 }
 
 impl ProjectEnvironment {
     /// Detects the build environment required by the project at `project_dir`.
     pub fn detect(project_dir: impl AsRef<Path>) -> Result<Self, ProjectDetectionError> {
-        Self::detect_with_observer(project_dir, |_| {})
+        Self::detect_with_runner_and_observer(project_dir, &SystemProcessRunner, |_| {})
     }
 
     /// Detects the project environment and reports meaningful milestones.
@@ -88,12 +119,36 @@ impl ProjectEnvironment {
     /// replace a domain error with a presentation-layer error.
     pub fn detect_with_observer<F>(
         project_dir: impl AsRef<Path>,
-        mut observer: F,
+        observer: F,
     ) -> Result<Self, ProjectDetectionError>
     where
         F: FnMut(ProjectDetectionEvent),
     {
-        detection::detect(project_dir.as_ref(), &mut observer)
+        Self::detect_with_runner_and_observer(project_dir, &SystemProcessRunner, observer)
+    }
+
+    /// Detects a project using a caller-provided process runner.
+    pub fn detect_with_runner<R>(
+        project_dir: impl AsRef<Path>,
+        runner: &R,
+    ) -> Result<Self, ProjectDetectionError>
+    where
+        R: ProcessRunner + ?Sized,
+    {
+        Self::detect_with_runner_and_observer(project_dir, runner, |_| {})
+    }
+
+    /// Detects a project using caller-provided process and progress adapters.
+    pub fn detect_with_runner_and_observer<R, F>(
+        project_dir: impl AsRef<Path>,
+        runner: &R,
+        mut observer: F,
+    ) -> Result<Self, ProjectDetectionError>
+    where
+        R: ProcessRunner + ?Sized,
+        F: FnMut(ProjectDetectionEvent),
+    {
+        detection::detect(project_dir.as_ref(), runner, &mut observer)
     }
 
     /// Loads a previously saved environment for `project_dir`.
@@ -127,12 +182,20 @@ impl ProjectEnvironment {
     }
 
     /// Binds or clears a registered Maven settings profile for this project.
-    pub fn set_maven_settings(&mut self, profile: Option<&MavenSettingsProfile>) {
-        self.maven.settings_profile = profile.map(|profile| profile.name().to_owned());
+    pub fn set_maven_settings(&mut self, profile: Option<&MavenSettingsProfile>) -> bool {
+        let Some(maven) = self.build_tool.as_maven_mut() else {
+            return false;
+        };
+        maven.settings_profile = profile.map(|profile| profile.name().to_owned());
+        true
     }
 
     pub fn project_type(&self) -> ProjectType {
-        self.project_type
+        self.build_tool.project_type()
+    }
+
+    pub fn build_tool(&self) -> &BuildToolEnvironment {
+        &self.build_tool
     }
 
     pub fn java_version(&self) -> u32 {
@@ -148,21 +211,36 @@ impl ProjectEnvironment {
         self.java.home()
     }
 
-    pub fn maven(&self) -> &MavenEnvironment {
-        &self.maven
+    pub fn maven(&self) -> Option<&MavenEnvironment> {
+        self.build_tool.as_maven()
     }
 
-    /// Creates a Maven command configured to use this environment's JDK.
-    pub fn maven_command<I, S>(
+    /// Describes a Maven process configured to use this environment's JDK.
+    pub fn maven_invocation<I, S>(
         &self,
         project_dir: impl AsRef<Path>,
         arguments: I,
-    ) -> Result<std::process::Command, ProjectBuildError>
+    ) -> Result<ProcessInvocation, ProjectBuildError>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<std::ffi::OsStr>,
     {
-        build::maven_command(project_dir.as_ref(), self, arguments)
+        self.maven_invocation_with_runner(project_dir, arguments, &SystemProcessRunner)
+    }
+
+    /// Describes a Maven process after validating it with a custom runner.
+    pub fn maven_invocation_with_runner<I, S, R>(
+        &self,
+        project_dir: impl AsRef<Path>,
+        arguments: I,
+        runner: &R,
+    ) -> Result<ProcessInvocation, ProjectBuildError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+        R: ProcessRunner + ?Sized,
+    {
+        build::maven_invocation(project_dir.as_ref(), self, arguments, runner)
     }
 }
 

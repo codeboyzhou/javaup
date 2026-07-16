@@ -3,9 +3,10 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
 
 use super::is_maven_version;
+use crate::executable;
+use crate::process::{ProcessInvocation, ProcessOutput, ProcessRunner};
 
 const WRAPPER_PROPERTIES_PATH: &str = ".mvn/wrapper/maven-wrapper.properties";
 
@@ -17,7 +18,7 @@ pub(super) fn find_wrapper(project_dir: &Path) -> Option<PathBuf> {
     wrapper_names()
         .iter()
         .map(|name| project_dir.join(name))
-        .find(|path| is_usable_executable(path))
+        .find(|path| executable::is_usable(path))
 }
 
 pub(super) fn find_maven_on_path() -> Option<PathBuf> {
@@ -25,7 +26,7 @@ pub(super) fn find_maven_on_path() -> Option<PathBuf> {
     for directory in env::split_paths(&path) {
         for name in maven_command_names() {
             let candidate = directory.join(name);
-            if is_usable_executable(&candidate) {
+            if executable::is_usable(&candidate) {
                 return Some(candidate);
             }
         }
@@ -33,29 +34,31 @@ pub(super) fn find_maven_on_path() -> Option<PathBuf> {
     None
 }
 
-pub(super) fn run_maven_version(
+pub(super) fn run_maven_version<R>(
+    runner: &R,
     executable: &Path,
     project_dir: &Path,
     java_home: &Path,
-) -> Result<Output, MavenProbeError> {
-    let path = path_with_java(java_home).map_err(MavenProbeError::InvalidPath)?;
-    Command::new(executable)
-        .arg("--version")
-        .current_dir(project_dir)
-        .env("JAVA_HOME", java_home)
-        .env("PATH", path)
-        .output()
-        .map_err(MavenProbeError::Command)
+) -> Result<ProcessOutput, MavenProbeError>
+where
+    R: ProcessRunner + ?Sized,
+{
+    let invocation = invocation(executable, project_dir, java_home, ["--version".into()])
+        .map_err(MavenProbeError::InvalidPath)?;
+    runner.output(&invocation).map_err(MavenProbeError::Command)
 }
 
-pub(super) fn configure_java(
-    command: &mut Command,
+pub(super) fn invocation(
+    executable: &Path,
+    project_dir: &Path,
     java_home: &Path,
-) -> Result<(), env::JoinPathsError> {
-    command
-        .env("JAVA_HOME", java_home)
-        .env("PATH", path_with_java(java_home)?);
-    Ok(())
+    arguments: impl IntoIterator<Item = OsString>,
+) -> Result<ProcessInvocation, env::JoinPathsError> {
+    let mut invocation =
+        ProcessInvocation::new(executable.to_owned(), arguments, project_dir.to_owned());
+    invocation.set_env("JAVA_HOME", java_home.as_os_str());
+    invocation.set_env("PATH", path_with_java(java_home)?);
+    Ok(invocation)
 }
 
 fn path_with_java(java_home: &Path) -> Result<OsString, env::JoinPathsError> {
@@ -134,19 +137,6 @@ fn strip_ansi_codes(value: &str) -> String {
     result
 }
 
-#[cfg(unix)]
-fn is_usable_executable(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-
-    fs::metadata(path)
-        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
-}
-
-#[cfg(not(unix))]
-fn is_usable_executable(path: &Path) -> bool {
-    path.is_file()
-}
-
 #[cfg(windows)]
 fn wrapper_names() -> &'static [&'static str] {
     &["mvnw.cmd", "mvnw.bat", "mvnw.exe", "mvnw"]
@@ -184,9 +174,47 @@ impl MavenProbeError {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
     use std::ffi::OsStr;
 
     use super::*;
+
+    struct RecordingRunner {
+        invocations: RefCell<Vec<ProcessInvocation>>,
+    }
+
+    impl RecordingRunner {
+        fn new() -> Self {
+            Self {
+                invocations: RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    impl ProcessRunner for RecordingRunner {
+        fn output(&self, invocation: &ProcessInvocation) -> io::Result<ProcessOutput> {
+            self.invocations.borrow_mut().push(invocation.clone());
+            Ok(ProcessOutput::new(
+                successful_exit_status(),
+                b"Apache Maven 3.9.9\n".to_vec(),
+                Vec::new(),
+            ))
+        }
+    }
+
+    #[cfg(unix)]
+    fn successful_exit_status() -> std::process::ExitStatus {
+        use std::os::unix::process::ExitStatusExt;
+
+        std::process::ExitStatus::from_raw(0)
+    }
+
+    #[cfg(windows)]
+    fn successful_exit_status() -> std::process::ExitStatus {
+        use std::os::windows::process::ExitStatusExt;
+
+        std::process::ExitStatus::from_raw(0)
+    }
 
     #[test]
     fn parses_supported_property_separators_and_maven_output() {
@@ -218,9 +246,54 @@ mod tests {
 
     #[test]
     fn os_strings_are_preserved_when_configuring_java() {
-        let mut command = Command::new(OsStr::new("mvn"));
         let java_home = Path::new("jdk");
-        let result = configure_java(&mut command, java_home);
-        assert!(result.is_ok());
+        let invocation = invocation(
+            Path::new("mvn"),
+            Path::new("project"),
+            java_home,
+            [OsString::from("verify")],
+        )
+        .unwrap();
+        assert_eq!(invocation.program(), Path::new("mvn"));
+        assert_eq!(
+            invocation.arguments().collect::<Vec<_>>(),
+            [OsStr::new("verify")]
+        );
+        assert_eq!(
+            invocation
+                .environment()
+                .find(|(key, _)| *key == OsStr::new("JAVA_HOME"))
+                .map(|(_, value)| value),
+            Some(java_home.as_os_str())
+        );
+    }
+
+    #[test]
+    fn probing_uses_the_injected_runner_and_selected_jdk() {
+        let runner = RecordingRunner::new();
+        let output = run_maven_version(
+            &runner,
+            Path::new("mvn"),
+            Path::new("project"),
+            Path::new("jdk-21"),
+        )
+        .unwrap();
+
+        assert!(output.status().success());
+        let invocations = runner.invocations.borrow();
+        assert_eq!(invocations.len(), 1);
+        let invocation = &invocations[0];
+        assert_eq!(invocation.program(), Path::new("mvn"));
+        assert_eq!(
+            invocation.arguments().collect::<Vec<_>>(),
+            [OsStr::new("--version")]
+        );
+        assert_eq!(
+            invocation
+                .environment()
+                .find(|(key, _)| *key == OsStr::new("JAVA_HOME"))
+                .map(|(_, value)| value),
+            Some(OsStr::new("jdk-21"))
+        );
     }
 }
