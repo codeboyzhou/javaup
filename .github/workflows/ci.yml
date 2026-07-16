@@ -16,7 +16,7 @@ jobs:
     name: format, lint, and docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install the minimum supported Rust toolchain
         run: rustup toolchain install 1.89.0 --profile minimal --component clippy,rustfmt
       - name: Check formatting
@@ -44,7 +44,7 @@ jobs:
             toolchain: stable
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust
         run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal
       - name: Run all tests
@@ -54,7 +54,7 @@ jobs:
     name: coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust coverage support
         run: rustup toolchain install stable --profile minimal --component llvm-tools-preview
       - name: Install cargo-llvm-cov
