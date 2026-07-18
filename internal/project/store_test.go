@@ -2,6 +2,7 @@ package project
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -49,5 +50,38 @@ func TestConfigStoreSavesStableProjectJSON(t *testing.T) {
 	}
 	if saved.BuildTool.Version != config.BuildTool.Version || saved.Java != config.Java {
 		t.Errorf("saved config = %#v, want %#v", saved, config)
+	}
+}
+
+func TestConfigStoreDeletesProjectConfigurationIdempotently(t *testing.T) {
+	t.Parallel()
+
+	store := NewConfigStore(filepath.Join(t.TempDir(), "projects"))
+	config := Config{ProjectRoot: filepath.Join("projects", "demo")}
+	savedPath, err := store.Save(config)
+	if err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	deletedPath, removed, err := store.Delete(config.ProjectRoot)
+	if err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if !removed {
+		t.Fatal("Delete() removed = false, want true")
+	}
+	if deletedPath != savedPath {
+		t.Errorf("Delete() path = %q, want %q", deletedPath, savedPath)
+	}
+	if _, err := os.Stat(savedPath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("Stat() error = %v, want os.ErrNotExist", err)
+	}
+
+	_, removed, err = store.Delete(config.ProjectRoot)
+	if err != nil {
+		t.Fatalf("Delete() repeated error = %v", err)
+	}
+	if removed {
+		t.Fatal("Delete() repeated removed = true, want false")
 	}
 }

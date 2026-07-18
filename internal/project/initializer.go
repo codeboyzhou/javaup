@@ -29,11 +29,9 @@ type Initializer struct {
 
 const (
 	initializationSteps = 5
-	projectStepName     = "Project"
 	buildToolStepName   = "Build Tool"
 	javaVersionStepName = "Java Version"
 	jdkStepName         = "JDK"
-	configStepName      = "Config"
 )
 
 // NewDefaultInitializer wires all currently supported project detectors.

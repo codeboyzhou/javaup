@@ -48,6 +48,7 @@ javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 
 ```text
 jup init
+jup uninit
 jup help [command]
 jup version
 ```
@@ -64,6 +65,9 @@ Linux:   $XDG_CONFIG_HOME/javaup/projects (or ~/.config/javaup/projects)
 
 Initialization reports each detection stage with cross-platform colored output
 when running in an interactive terminal. Setting `NO_COLOR` disables colors.
+
+`jup uninit` removes the saved configuration for the current project. Repeated
+execution is safe when the project has already been uninitialized.
 
 The standard `--help`, `-h`, `--version`, and `-v` flags are also supported.
 

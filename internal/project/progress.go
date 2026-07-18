@@ -1,5 +1,10 @@
 package project
 
+const (
+	projectStepName = "Project"
+	configStepName  = "Config"
+)
+
 // ProgressState identifies the lifecycle state of an initialization step.
 type ProgressState string
 
@@ -14,7 +19,7 @@ const (
 	ProgressFailed ProgressState = "failed"
 )
 
-// ProgressEvent reports one meaningful initialization operation.
+// ProgressEvent reports one meaningful project operation.
 type ProgressEvent struct {
 	Step    int
 	Total   int
@@ -23,7 +28,7 @@ type ProgressEvent struct {
 	State   ProgressState
 }
 
-// ProgressFunc receives initialization progress events.
+// ProgressFunc receives project operation progress events.
 type ProgressFunc func(event ProgressEvent)
 
 func reportProgress(progress ProgressFunc, event ProgressEvent) {

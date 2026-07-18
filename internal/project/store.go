@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -64,6 +65,18 @@ func (s *ConfigStore) Save(config Config) (string, error) {
 	}
 
 	return path, nil
+}
+
+// Delete removes the configuration associated with projectRoot.
+func (s *ConfigStore) Delete(projectRoot string) (path string, removed bool, err error) {
+	path = filepath.Join(s.baseDir, configFileName(projectRoot))
+	if err := os.Remove(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return path, false, nil
+		}
+		return path, false, fmt.Errorf("remove project configuration: %w", err)
+	}
+	return path, true, nil
 }
 
 func configFileName(projectRoot string) string {
