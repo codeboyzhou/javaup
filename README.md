@@ -47,9 +47,23 @@ javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 ## Commands
 
 ```text
+jup init
 jup help [command]
 jup version
 ```
+
+`jup init` currently detects Maven projects, their Maven or Maven Wrapper
+version, the Java build version, and the matching local JDK. Project metadata is
+stored as JSON under the platform-specific user configuration directory:
+
+```text
+Windows: %AppData%\javaup\projects
+macOS:   ~/Library/Application Support/javaup/projects
+Linux:   $XDG_CONFIG_HOME/javaup/projects (or ~/.config/javaup/projects)
+```
+
+Initialization reports each detection stage with cross-platform colored output
+when running in an interactive terminal. Setting `NO_COLOR` disables colors.
 
 The standard `--help`, `-h`, `--version`, and `-v` flags are also supported.
 
