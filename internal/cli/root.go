@@ -1,0 +1,29 @@
+package cli
+
+import "github.com/spf13/cobra"
+
+func newRootCommand(options Options) *cobra.Command {
+	root := &cobra.Command{
+		Use:           options.Name,
+		Short:         options.Description,
+		Version:       options.Version,
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			return command.Help()
+		},
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDefaultCmd: true,
+		},
+	}
+	root.SetOut(options.Stdout)
+	root.SetErr(options.Stderr)
+	root.SetVersionTemplate("{{.Name}} {{.Version}}\n")
+
+	// Register top-level commands here. Command-specific dependencies should be
+	// passed into their constructors instead of accessed through global state.
+	root.AddCommand(newVersionCommand(options.Version))
+
+	return root
+}
