@@ -11,6 +11,16 @@ const (
 	Maven Type = "maven"
 )
 
+// DisplayName returns the user-facing name of a build tool.
+func (t Type) DisplayName() string {
+	switch t {
+	case Maven:
+		return "Maven"
+	default:
+		return string(t)
+	}
+}
+
 // Wrapper describes a project-local build tool wrapper.
 type Wrapper struct {
 	Enabled    bool   `json:"enabled"`

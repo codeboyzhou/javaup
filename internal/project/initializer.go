@@ -27,7 +27,14 @@ type Initializer struct {
 	now       func() time.Time
 }
 
-const initializationSteps = 5
+const (
+	initializationSteps = 5
+	projectStepName     = "Project"
+	buildToolStepName   = "Build Tool"
+	javaVersionStepName = "Java Version"
+	jdkStepName         = "JDK"
+	configStepName      = "Config"
+)
 
 // NewDefaultInitializer wires all currently supported project detectors.
 func NewDefaultInitializer() (*Initializer, error) {
@@ -55,26 +62,26 @@ func NewInitializer(detectors []buildtool.Detector, java javaLocator, store conf
 // Initialize scans root, reports meaningful progress, and writes its project configuration.
 func (i *Initializer) Initialize(ctx context.Context, root string, progress ProgressFunc) (Config, string, error) {
 	reportProgress(progress, ProgressEvent{
-		Step: 1, Total: initializationSteps, Name: "PROJECT", State: ProgressStarted,
-		Message: "Inspect current project directory",
+		Step: 1, Total: initializationSteps, Name: projectStepName, State: ProgressStarted,
+		Message: "Inspecting current project directory",
 	})
 	canonicalRoot, err := canonicalProjectRoot(root)
 	if err != nil {
-		reportFailure(progress, 1, "PROJECT", err)
+		reportFailure(progress, 1, projectStepName, err)
 		return Config{}, "", err
 	}
-	reportSuccess(progress, 1, "PROJECT", canonicalRoot)
+	reportSuccess(progress, 1, projectStepName, canonicalRoot)
 
 	reportProgress(progress, ProgressEvent{
-		Step: 2, Total: initializationSteps, Name: "BUILD TOOL", State: ProgressStarted,
-		Message: "Detect build tool, version, and wrapper",
+		Step: 2, Total: initializationSteps, Name: buildToolStepName, State: ProgressStarted,
+		Message: "Detecting build tool, version, and wrapper",
 	})
 	var detection buildtool.Detection
 	found := false
 	for _, detector := range i.detectors {
 		detection, found, err = detector.Detect(ctx, canonicalRoot)
 		if err != nil {
-			reportFailure(progress, 2, "BUILD TOOL", err)
+			reportFailure(progress, 2, buildToolStepName, err)
 			return Config{}, "", err
 		}
 		if found {
@@ -83,24 +90,19 @@ func (i *Initializer) Initialize(ctx context.Context, root string, progress Prog
 	}
 	if !found {
 		err := fmt.Errorf("no supported build project found in %s", canonicalRoot)
-		reportFailure(progress, 2, "BUILD TOOL", err)
+		reportFailure(progress, 2, buildToolStepName, err)
 		return Config{}, "", err
 	}
-	tool := string(detection.Tool.Type) + " " + detection.Tool.Version
-	reportProgress(progress, ProgressEvent{
-		Step: 2, Total: initializationSteps, Name: "BUILD TOOL", State: ProgressInfo,
-		Message: wrapperProgressMessage(detection.Tool),
-	})
-	reportSuccess(progress, 2, "BUILD TOOL", tool)
+	reportSuccess(progress, 2, buildToolStepName, buildToolProgressMessage(detection.Tool))
 
 	reportProgress(progress, ProgressEvent{
-		Step: 3, Total: initializationSteps, Name: "JAVA VERSION", State: ProgressStarted,
-		Message: "Detect configured Java build version",
+		Step: 3, Total: initializationSteps, Name: javaVersionStepName, State: ProgressStarted,
+		Message: "Detecting configured Java build version",
 	})
 	if detection.BuildJavaVersion == "" {
-		reportSuccess(progress, 3, "JAVA VERSION", "Use the build runtime JDK")
+		reportSuccess(progress, 3, javaVersionStepName, "Use the build runtime JDK")
 	} else {
-		reportSuccess(progress, 3, "JAVA VERSION", "Java "+detection.BuildJavaVersion)
+		reportSuccess(progress, 3, javaVersionStepName, "Java "+detection.BuildJavaVersion)
 	}
 
 	preferred := make([]javainfo.Installation, 0, 1)
@@ -111,15 +113,15 @@ func (i *Initializer) Initialize(ctx context.Context, root string, progress Prog
 		})
 	}
 	reportProgress(progress, ProgressEvent{
-		Step: 4, Total: initializationSteps, Name: "JDK", State: ProgressStarted,
-		Message: "Locate matching installed JDK",
+		Step: 4, Total: initializationSteps, Name: jdkStepName, State: ProgressStarted,
+		Message: "Locating matching installed JDK",
 	})
 	java, err := i.java.Locate(ctx, detection.BuildJavaVersion, preferred...)
 	if err != nil {
-		reportFailure(progress, 4, "JDK", err)
+		reportFailure(progress, 4, jdkStepName, err)
 		return Config{}, "", fmt.Errorf("locate project JDK: %w", err)
 	}
-	reportSuccess(progress, 4, "JDK", "Java "+java.Version+" at "+java.Home)
+	reportSuccess(progress, 4, jdkStepName, "Java "+java.Version+" at "+java.Home)
 
 	config := Config{
 		SchemaVersion: currentSchemaVersion,
@@ -129,23 +131,24 @@ func (i *Initializer) Initialize(ctx context.Context, root string, progress Prog
 		InitializedAt: i.now().UTC(),
 	}
 	reportProgress(progress, ProgressEvent{
-		Step: 5, Total: initializationSteps, Name: "CONFIG", State: ProgressStarted,
-		Message: "Save local project configuration",
+		Step: 5, Total: initializationSteps, Name: configStepName, State: ProgressStarted,
+		Message: "Saving local project configuration",
 	})
 	path, err := i.store.Save(config)
 	if err != nil {
-		reportFailure(progress, 5, "CONFIG", err)
+		reportFailure(progress, 5, configStepName, err)
 		return Config{}, "", err
 	}
-	reportSuccess(progress, 5, "CONFIG", path)
+	reportSuccess(progress, 5, configStepName, path)
 	return config, path, nil
 }
 
-func wrapperProgressMessage(info buildtool.Info) string {
-	if !info.Wrapper.Enabled {
-		return "Build wrapper: not detected"
+func buildToolProgressMessage(info buildtool.Info) string {
+	source := "PATH"
+	if info.Wrapper.Enabled {
+		source = "wrapper"
 	}
-	return "Build wrapper: " + filepath.Base(info.Wrapper.Executable)
+	return fmt.Sprintf("%s %s (%s)", info.Type.DisplayName(), info.Version, source)
 }
 
 func reportSuccess(progress ProgressFunc, step int, name, message string) {

@@ -16,10 +16,10 @@ type fakeProjectInitializer struct {
 
 func (i fakeProjectInitializer) Initialize(_ context.Context, _ string, progress project.ProgressFunc) (project.Config, string, error) {
 	progress(project.ProgressEvent{
-		Step: 1, Total: 5, Name: "PROJECT", Message: i.config.ProjectRoot, State: project.ProgressStarted,
+		Step: 1, Total: 5, Name: "Project", Message: i.config.ProjectRoot, State: project.ProgressStarted,
 	})
 	progress(project.ProgressEvent{
-		Step: 1, Total: 5, Name: "PROJECT", Message: i.config.ProjectRoot, State: project.ProgressSucceeded,
+		Step: 1, Total: 5, Name: "Project", Message: i.config.ProjectRoot, State: project.ProgressSucceeded,
 	})
 	return i.config, i.path, nil
 }
@@ -41,8 +41,8 @@ func TestInitCommandPrintsConciseProgress(t *testing.T) {
 	if err := command.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("ExecuteContext() error = %v", err)
 	}
-	want := "[1/5] PROJECT - " + config.ProjectRoot + "\n" +
-		"[1/5] PROJECT OK - " + config.ProjectRoot + "\n" +
+	want := "[1/5] Project - " + config.ProjectRoot + "\n" +
+		"[1/5] Project OK - " + config.ProjectRoot + "\n" +
 		"Initialized javaup project.\n"
 	if output.String() != want {
 		t.Errorf("output = %q, want %q", output.String(), want)

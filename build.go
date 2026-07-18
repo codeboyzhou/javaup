@@ -55,38 +55,38 @@ func runBuild(colors palette) error {
 
 	steps := []buildStep{
 		{
-			name:        "FORMAT",
-			description: "format Go source files",
+			name:        "Format",
+			description: "Formatting Go source files",
 			program:     "go",
 			args:        []string{"fmt", "./..."},
 		},
 		{
-			name:        "VET",
-			description: "run Go static analysis",
+			name:        "Vet",
+			description: "Running Go static analysis",
 			program:     "go",
 			args:        []string{"vet", "./..."},
 		},
 		{
-			name:        "LINT",
-			description: "run GolangCI-Lint",
+			name:        "Lint",
+			description: "Running GolangCI-Lint",
 			program:     "go",
 			args:        []string{"tool", "-modfile=golangci-lint.mod", "golangci-lint", "run"},
 		},
 		{
-			name:        "TEST",
-			description: "run all tests",
+			name:        "Test",
+			description: "Running all tests",
 			program:     "go",
 			args:        []string{"test", "./..."},
 		},
 		{
-			name:        "VULNCHECK",
-			description: "scan dependencies for known vulnerabilities",
+			name:        "Vulncheck",
+			description: "Scanning dependencies for known vulnerabilities",
 			program:     "go",
 			args:        []string{"tool", "-modfile=govulncheck.mod", "govulncheck", "./..."},
 		},
 		{
-			name:        "BUILD",
-			description: "build the jup executable",
+			name:        "Build",
+			description: "Building the jup executable",
 			program:     "go",
 			args:        []string{"build", "-trimpath", "-o", artifact, "./cmd/jup"},
 		},
@@ -132,7 +132,7 @@ func runStep(colors palette, index, total int, step buildStep) error {
 	command.Stderr = os.Stderr
 
 	if err := command.Run(); err != nil {
-		result := fmt.Sprintf("[%d/%d] %s FAILED", index, total, step.name)
+		result := fmt.Sprintf("[%d/%d] %s Failed", index, total, step.name)
 		fmt.Printf(
 			"%s %s\n",
 			colors.apply(colors.failure, result),
@@ -163,13 +163,13 @@ func newPalette() palette {
 	}
 
 	return palette{
-		title:    style(color.Bold, color.FgCyan),
+		title:    style(color.FgCyan),
 		label:    style(color.FgCyan),
-		value:    style(color.Bold),
-		stage:    style(color.Bold, color.FgBlue),
+		value:    style(),
+		stage:    style(color.FgBlue),
 		command:  style(color.Faint, color.FgWhite),
-		success:  style(color.Bold, color.FgGreen),
-		failure:  style(color.Bold, color.FgRed),
+		success:  style(color.FgGreen),
+		failure:  style(color.FgRed),
 		duration: style(color.FgYellow),
 	}
 }

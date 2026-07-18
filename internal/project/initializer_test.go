@@ -81,17 +81,16 @@ func TestInitializerCoordinatesDetectionAndStorage(t *testing.T) {
 		name  string
 		state ProgressState
 	}{
-		{name: "PROJECT", state: ProgressStarted},
-		{name: "PROJECT", state: ProgressSucceeded},
-		{name: "BUILD TOOL", state: ProgressStarted},
-		{name: "BUILD TOOL", state: ProgressInfo},
-		{name: "BUILD TOOL", state: ProgressSucceeded},
-		{name: "JAVA VERSION", state: ProgressStarted},
-		{name: "JAVA VERSION", state: ProgressSucceeded},
-		{name: "JDK", state: ProgressStarted},
-		{name: "JDK", state: ProgressSucceeded},
-		{name: "CONFIG", state: ProgressStarted},
-		{name: "CONFIG", state: ProgressSucceeded},
+		{name: projectStepName, state: ProgressStarted},
+		{name: projectStepName, state: ProgressSucceeded},
+		{name: buildToolStepName, state: ProgressStarted},
+		{name: buildToolStepName, state: ProgressSucceeded},
+		{name: javaVersionStepName, state: ProgressStarted},
+		{name: javaVersionStepName, state: ProgressSucceeded},
+		{name: jdkStepName, state: ProgressStarted},
+		{name: jdkStepName, state: ProgressSucceeded},
+		{name: configStepName, state: ProgressStarted},
+		{name: configStepName, state: ProgressSucceeded},
 	}
 	if len(events) != len(wantEvents) {
 		t.Fatalf("progress event count = %d, want %d", len(events), len(wantEvents))
@@ -106,5 +105,44 @@ func TestInitializerCoordinatesDetectionAndStorage(t *testing.T) {
 		if events[index].Step < 1 || events[index].Total != initializationSteps {
 			t.Errorf("progress event %d has invalid position %d/%d", index, events[index].Step, events[index].Total)
 		}
+	}
+	wantStartedMessages := map[string]string{
+		projectStepName:     "Inspecting current project directory",
+		buildToolStepName:   "Detecting build tool, version, and wrapper",
+		javaVersionStepName: "Detecting configured Java build version",
+		jdkStepName:         "Locating matching installed JDK",
+		configStepName:      "Saving local project configuration",
+	}
+	for _, event := range events {
+		if event.State == ProgressStarted && event.Message != wantStartedMessages[event.Name] {
+			t.Errorf("%s progress message = %q, want %q", event.Name, event.Message, wantStartedMessages[event.Name])
+		}
+	}
+	if events[3].Message != "Maven 3.9.11 (wrapper)" {
+		t.Errorf("build tool progress = %q, want %q", events[3].Message, "Maven 3.9.11 (wrapper)")
+	}
+}
+
+func TestBuildToolProgressMessageIdentifiesSource(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		wrapper bool
+		want    string
+	}{
+		{name: "wrapper", wrapper: true, want: "Maven 3.9.16 (wrapper)"},
+		{name: "path", wrapper: false, want: "Maven 3.9.16 (PATH)"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			info := buildtool.Info{
+				Type: buildtool.Maven, Version: "3.9.16", Wrapper: buildtool.Wrapper{Enabled: test.wrapper},
+			}
+			if got := buildToolProgressMessage(info); got != test.want {
+				t.Errorf("buildToolProgressMessage() = %q, want %q", got, test.want)
+			}
+		})
 	}
 }

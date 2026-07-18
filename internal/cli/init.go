@@ -68,10 +68,10 @@ func newInitProgressRenderer(writer io.Writer) *initProgressRenderer {
 
 	return &initProgressRenderer{
 		writer:  writer,
-		stage:   style(color.Bold, color.FgBlue),
+		stage:   style(color.FgBlue),
 		info:    style(color.FgCyan),
-		success: style(color.Bold, color.FgGreen),
-		failure: style(color.Bold, color.FgRed),
+		success: style(color.FgGreen),
+		failure: style(color.FgRed),
 	}
 }
 
@@ -90,7 +90,7 @@ func (r *initProgressRenderer) Report(event project.ProgressEvent) {
 	case project.ProgressSucceeded:
 		line = fmt.Sprintf("%s - %s\n", r.success.Sprint(stage+" OK"), event.Message)
 	case project.ProgressFailed:
-		line = fmt.Sprintf("%s - %s\n", r.failure.Sprint(stage+" FAILED"), event.Message)
+		line = fmt.Sprintf("%s - %s\n", r.failure.Sprint(stage+" Failed"), event.Message)
 	default:
 		return
 	}
