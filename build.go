@@ -33,7 +33,7 @@ type palette struct {
 func main() {
 	colors := newPalette()
 	if err := runBuild(colors); err != nil {
-		fmt.Fprintf(os.Stderr, "\n%s: %v\n", colors.apply(colors.failure, "BUILD FAILED"), err)
+		fmt.Fprintf(os.Stderr, "%s: %v\n", colors.apply(colors.failure, "BUILD FAILED"), err)
 		os.Exit(1)
 	}
 }
@@ -93,9 +93,14 @@ func runBuild(colors palette) error {
 	}
 
 	started := time.Now()
-	fmt.Println(colors.apply(colors.title, "JUP BUILD"))
-	fmt.Printf("%s   %s\n", colors.apply(colors.label, "Target:"), colors.apply(colors.value, goos+"/"+goarch))
-	fmt.Printf("%s %s\n\n", colors.apply(colors.label, "Artifact:"), colors.apply(colors.value, artifact))
+	fmt.Printf(
+		"%s | %s %s | %s %s\n",
+		colors.apply(colors.title, "JUP BUILD"),
+		colors.apply(colors.label, "Target:"),
+		colors.apply(colors.value, goos+"/"+goarch),
+		colors.apply(colors.label, "Artifact:"),
+		colors.apply(colors.value, artifact),
+	)
 
 	for index, step := range steps {
 		if err := runStep(colors, index+1, len(steps), step); err != nil {
@@ -104,11 +109,12 @@ func runBuild(colors palette) error {
 	}
 
 	fmt.Printf(
-		"\n%s %s\n",
+		"%s %s | %s %s\n",
 		colors.apply(colors.success, "BUILD SUCCEEDED"),
 		colors.apply(colors.duration, "in "+elapsed(started).String()),
+		colors.apply(colors.label, "Artifact:"),
+		colors.apply(colors.value, artifact),
 	)
-	fmt.Printf("%s %s\n", colors.apply(colors.label, "Artifact:"), colors.apply(colors.value, artifact))
 	return nil
 }
 
@@ -137,7 +143,7 @@ func runStep(colors palette, index, total int, step buildStep) error {
 
 	result := fmt.Sprintf("[%d/%d] %s OK", index, total, step.name)
 	fmt.Printf(
-		"%s %s\n\n",
+		"%s %s\n",
 		colors.apply(colors.success, result),
 		colors.apply(colors.duration, "in "+elapsed(started).String()),
 	)

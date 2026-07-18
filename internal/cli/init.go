@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -36,7 +34,7 @@ func newInitCommand(factory initializerFactory, workingDirectory func() (string,
 			}
 
 			progress := newInitProgressRenderer(command.OutOrStdout())
-			config, configPath, err := initializer.Initialize(command.Context(), root, progress.Report)
+			_, _, err = initializer.Initialize(command.Context(), root, progress.Report)
 			if progress.Err() != nil {
 				return progress.Err()
 			}
@@ -44,26 +42,7 @@ func newInitCommand(factory initializerFactory, workingDirectory func() (string,
 				return err
 			}
 
-			wrapper := "no"
-			if config.BuildTool.Wrapper.Enabled {
-				wrapper = "yes (" + filepath.Base(config.BuildTool.Wrapper.Executable) + ")"
-			}
-			toolName := string(config.BuildTool.Type)
-			if toolName != "" {
-				toolName = strings.ToUpper(toolName[:1]) + toolName[1:]
-			}
-			output := fmt.Sprintf(
-				"%s\n\nProject root:  %s\nBuild tool:    %s %s\nBuild wrapper: %s\nJava:          %s\nJava home:     %s\nConfiguration: %s\n",
-				progress.Success("Initialized javaup project."),
-				config.ProjectRoot,
-				toolName,
-				config.BuildTool.Version,
-				wrapper,
-				config.Java.Version,
-				config.Java.Home,
-				configPath,
-			)
-			_, err = fmt.Fprint(command.OutOrStdout(), output)
+			_, err = fmt.Fprintln(command.OutOrStdout(), progress.Success("Initialized javaup project."))
 			return err
 		},
 	}
@@ -109,7 +88,7 @@ func (r *initProgressRenderer) Report(event project.ProgressEvent) {
 	case project.ProgressInfo:
 		line = fmt.Sprintf("      %s\n", r.info.Sprint(event.Message))
 	case project.ProgressSucceeded:
-		line = fmt.Sprintf("%s - %s\n\n", r.success.Sprint(stage+" OK"), event.Message)
+		line = fmt.Sprintf("%s - %s\n", r.success.Sprint(stage+" OK"), event.Message)
 	case project.ProgressFailed:
 		line = fmt.Sprintf("%s - %s\n", r.failure.Sprint(stage+" FAILED"), event.Message)
 	default:
