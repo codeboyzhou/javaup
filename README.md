@@ -4,17 +4,32 @@
 
 ## Development
 
-Build the CLI:
+Run the complete local build pipeline:
 
 ```shell
-go build -o jup ./cmd/jup
+go run build.go
 ```
 
-Run the test suite:
+The script stops on the first failure and runs these stages in order:
 
-```shell
+```text
+go fmt ./...
+go vet ./...
+go tool -modfile=golangci-lint.mod golangci-lint run
 go test ./...
+go tool -modfile=govulncheck.mod govulncheck ./...
+go build -trimpath -o dist/<binary> ./cmd/jup
 ```
+
+GolangCI-Lint and govulncheck are pinned in isolated Go module files, so no
+global tool installation is required and their dependencies do not affect the
+application module. Linter selection is defined in `.golangci.yml`. The
+resulting executable is written to `dist`.
+
+Build output uses colors when stdout is an interactive terminal. Set
+`JUP_BUILD_COLOR=always` or `JUP_BUILD_COLOR=never` to override detection;
+setting `NO_COLOR` also disables colors in automatic mode. Color rendering is
+provided by `github.com/fatih/color` for cross-platform terminal support.
 
 Inject a release version at build time:
 
@@ -41,7 +56,11 @@ The standard `--help`, `-h`, `--version`, and `-v` flags are also supported.
 ## Project structure
 
 ```text
+.golangci.yml       lint policy and enabled analyzers
+build.go            local verification and build pipeline
 cmd/jup/            executable entry point
+golangci-lint.mod   isolated GolangCI-Lint dependencies
+govulncheck.mod     isolated govulncheck dependencies
 internal/buildinfo/ build-time version metadata
 internal/cli/       Cobra command tree and built-in commands
 ```

@@ -1,3 +1,4 @@
+// Command jup manages Java versions from the command line.
 package main
 
 import (

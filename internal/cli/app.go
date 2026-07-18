@@ -46,7 +46,7 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	a.root.SetArgs(args)
 
 	if err := a.root.ExecuteContext(ctx); err != nil {
-		fmt.Fprintf(a.stderr, "%s: %v\n", a.root.Name(), err)
+		_, _ = fmt.Fprintf(a.stderr, "%s: %v\n", a.root.Name(), err)
 		return exitFailure
 	}
 
