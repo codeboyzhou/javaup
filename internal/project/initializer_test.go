@@ -67,8 +67,8 @@ func TestInitializerCoordinatesDetectionAndStorage(t *testing.T) {
 	if config.Java.Home != "/jdk-17" {
 		t.Errorf("Java home = %q, want %q", config.Java.Home, "/jdk-17")
 	}
-	if config.InitializedAt != initializedAt.UTC() {
-		t.Errorf("InitializedAt = %v, want %v", config.InitializedAt, initializedAt.UTC())
+	if config.InitializedAt.Time != initializedAt {
+		t.Errorf("InitializedAt = %v, want %v", config.InitializedAt, initializedAt)
 	}
 	if path != store.path {
 		t.Errorf("path = %q, want %q", path, store.path)

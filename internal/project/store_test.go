@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,7 +25,7 @@ func TestConfigStoreSavesStableProjectJSON(t *testing.T) {
 			Version: "3.9.11",
 		},
 		Java:          javainfo.Installation{Version: "17", Home: filepath.Join("jdks", "17")},
-		InitializedAt: time.Date(2026, 7, 18, 4, 0, 0, 0, time.UTC),
+		InitializedAt: NewLocalTimestamp(time.Date(2026, 7, 18, 12, 0, 0, 0, time.FixedZone("test", 8*60*60))),
 	}
 
 	firstPath, err := store.Save(config)
@@ -50,6 +51,12 @@ func TestConfigStoreSavesStableProjectJSON(t *testing.T) {
 	}
 	if saved.BuildTool.Version != config.BuildTool.Version || saved.Java != config.Java {
 		t.Errorf("saved config = %#v, want %#v", saved, config)
+	}
+	if got, want := saved.InitializedAt.Format(localTimestampLayout), "2026-07-18 12:00:00"; got != want {
+		t.Errorf("saved initializedAt = %q, want %q", got, want)
+	}
+	if !strings.Contains(string(content), `"initializedAt": "2026-07-18 12:00:00"`) {
+		t.Errorf("saved JSON contains an unexpected initializedAt value: %s", content)
 	}
 }
 

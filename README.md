@@ -65,6 +65,7 @@ Linux:   $XDG_CONFIG_HOME/javaup/projects (or ~/.config/javaup/projects)
 
 Initialization reports each detection stage with cross-platform colored output
 when running in an interactive terminal. Setting `NO_COLOR` disables colors.
+The `initializedAt` value uses the local `YYYY-MM-DD HH:mm:ss` format.
 
 `jup uninit` removes the saved configuration for the current project. Repeated
 execution is safe when the project has already been uninitialized.

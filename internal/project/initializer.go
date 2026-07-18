@@ -126,7 +126,7 @@ func (i *Initializer) Initialize(ctx context.Context, root string, progress Prog
 		ProjectRoot:   canonicalRoot,
 		BuildTool:     detection.Tool,
 		Java:          java,
-		InitializedAt: i.now().UTC(),
+		InitializedAt: NewLocalTimestamp(i.now()),
 	}
 	reportProgress(progress, ProgressEvent{
 		Step: 5, Total: initializationSteps, Name: configStepName, State: ProgressStarted,
