@@ -12,8 +12,18 @@ func newVersionCommand(version string) *cobra.Command {
 		Short: "Print version information",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			_, err := fmt.Fprintf(command.OutOrStdout(), "%s %s\n", command.Root().Name(), version)
+			_, err := fmt.Fprintln(command.OutOrStdout(), version)
 			return err
 		},
 	}
+}
+
+func formatVersion(options Options) string {
+	return fmt.Sprintf(
+		"%s version %s %s (%s)",
+		options.ProductName,
+		options.Version,
+		options.Platform,
+		options.Commit,
+	)
 }

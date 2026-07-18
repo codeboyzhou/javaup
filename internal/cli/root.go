@@ -3,10 +3,11 @@ package cli
 import "github.com/spf13/cobra"
 
 func newRootCommand(options Options) *cobra.Command {
+	version := formatVersion(options)
 	root := &cobra.Command{
 		Use:           options.Name,
 		Short:         options.Description,
-		Version:       options.Version,
+		Version:       version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,
@@ -19,11 +20,11 @@ func newRootCommand(options Options) *cobra.Command {
 	}
 	root.SetOut(options.Stdout)
 	root.SetErr(options.Stderr)
-	root.SetVersionTemplate("{{.Name}} {{.Version}}\n")
+	root.SetVersionTemplate("{{.Version}}\n")
 
 	// Register top-level commands here. Command-specific dependencies should be
 	// passed into their constructors instead of accessed through global state.
-	root.AddCommand(newVersionCommand(options.Version))
+	root.AddCommand(newVersionCommand(version))
 
 	return root
 }

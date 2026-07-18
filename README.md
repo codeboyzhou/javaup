@@ -19,7 +19,14 @@ go test ./...
 Inject a release version at build time:
 
 ```shell
-go build -ldflags "-X github.com/codeboyzhou/javaup/internal/buildinfo.Version=v1.0.0" -o jup ./cmd/jup
+go build -ldflags "-X github.com/codeboyzhou/javaup/internal/buildinfo.Version=v1.0.0 -X github.com/codeboyzhou/javaup/internal/buildinfo.Commit=<commit-hash>" -o jup ./cmd/jup
+```
+
+When `Commit` is not explicitly injected, `jup` uses the VCS revision embedded
+by the Go toolchain. Version output includes its first 12 characters:
+
+```text
+javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 ```
 
 ## Commands

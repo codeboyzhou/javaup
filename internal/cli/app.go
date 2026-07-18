@@ -17,8 +17,11 @@ const (
 // Options contains the dependencies and metadata needed by the CLI.
 type Options struct {
 	Name        string
+	ProductName string
 	Description string
 	Version     string
+	Platform    string
+	Commit      string
 	Stdout      io.Writer
 	Stderr      io.Writer
 }

@@ -44,19 +44,19 @@ func TestAppRun(t *testing.T) {
 			name:       "version command prints version",
 			args:       []string{"version"},
 			wantCode:   exitSuccess,
-			wantOutput: []string{"jup v1.2.3"},
+			wantOutput: []string{"javaup version v1.2.3 testos/testarch (0123456789ab)"},
 		},
 		{
 			name:       "version flag prints version",
 			args:       []string{"--version"},
 			wantCode:   exitSuccess,
-			wantOutput: []string{"jup v1.2.3"},
+			wantOutput: []string{"javaup version v1.2.3 testos/testarch (0123456789ab)"},
 		},
 		{
 			name:       "short version flag prints version",
 			args:       []string{"-v"},
 			wantCode:   exitSuccess,
-			wantOutput: []string{"jup v1.2.3"},
+			wantOutput: []string{"javaup version v1.2.3 testos/testarch (0123456789ab)"},
 		},
 		{
 			name:      "unknown command fails",
@@ -80,8 +80,11 @@ func TestAppRun(t *testing.T) {
 			var stderr bytes.Buffer
 			app := New(Options{
 				Name:        "jup",
+				ProductName: "javaup",
 				Description: "A command-line tool for managing Java versions.",
 				Version:     "v1.2.3",
+				Platform:    "testos/testarch",
+				Commit:      "0123456789ab",
 				Stdout:      &stdout,
 				Stderr:      &stderr,
 			})
@@ -95,13 +98,41 @@ func TestAppRun(t *testing.T) {
 	}
 }
 
+func TestVersionOutput(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	app := New(Options{
+		Name:        "jup",
+		ProductName: "javaup",
+		Description: "A command-line tool for managing Java versions.",
+		Version:     "v0.1.0",
+		Platform:    "windows/amd64",
+		Commit:      "64c2fb07bcad",
+		Stdout:      &stdout,
+		Stderr:      &bytes.Buffer{},
+	})
+
+	if got := app.Run(context.Background(), []string{"version"}); got != exitSuccess {
+		t.Fatalf("Run() exit code = %d, want %d", got, exitSuccess)
+	}
+	const want = "javaup version v0.1.0 windows/amd64 (64c2fb07bcad)\n"
+	if got := normalizedOutput(stdout.String()); got != want {
+		t.Errorf("version output = %q, want %q", got, want)
+	}
+}
+
 func assertContains(t *testing.T, got string, wants []string) {
 	t.Helper()
 
-	got = strings.ReplaceAll(got, "\r\n", "\n")
+	got = normalizedOutput(got)
 	for _, want := range wants {
 		if !strings.Contains(got, want) {
 			t.Errorf("output %q does not contain %q", got, want)
 		}
 	}
+}
+
+func normalizedOutput(output string) string {
+	return strings.ReplaceAll(output, "\r\n", "\n")
 }
