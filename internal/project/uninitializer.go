@@ -7,6 +7,7 @@ import (
 const uninitializationSteps = 2
 
 type configRemover interface {
+	configFinder
 	Delete(projectRoot string) (path string, removed bool, err error)
 }
 
@@ -29,7 +30,7 @@ func NewUninitializer(store configRemover) *Uninitializer {
 	return &Uninitializer{store: store}
 }
 
-// Uninitialize removes root's saved project configuration if it exists.
+// Uninitialize removes the nearest saved project configuration containing root.
 func (u *Uninitializer) Uninitialize(
 	ctx context.Context,
 	root string,
@@ -41,14 +42,31 @@ func (u *Uninitializer) Uninitialize(
 		reportUninitFailure(progress, 1, projectStepName, err)
 		return "", false, err
 	}
-	reportUninitProgress(progress, 1, projectStepName, ProgressSucceeded, canonicalRoot)
+	if err := ctx.Err(); err != nil {
+		reportUninitFailure(progress, 1, projectStepName, err)
+		return "", false, err
+	}
+	config, path, found, err := u.store.Find(canonicalRoot)
+	if err != nil {
+		reportUninitFailure(progress, 1, projectStepName, err)
+		return path, false, err
+	}
+	projectRoot := canonicalRoot
+	if found {
+		projectRoot = config.ProjectRoot
+	}
+	reportUninitProgress(progress, 1, projectStepName, ProgressSucceeded, projectRoot)
 
 	reportUninitProgress(progress, 2, configStepName, ProgressStarted, "Removing local project configuration")
 	if err := ctx.Err(); err != nil {
 		reportUninitFailure(progress, 2, configStepName, err)
-		return "", false, err
+		return path, false, err
 	}
-	path, removed, err = u.store.Delete(canonicalRoot)
+	if !found {
+		reportUninitProgress(progress, 2, configStepName, ProgressSucceeded, "No saved configuration found")
+		return path, false, nil
+	}
+	path, removed, err = u.store.Delete(projectRoot)
 	if err != nil {
 		reportUninitFailure(progress, 2, configStepName, err)
 		return path, false, err

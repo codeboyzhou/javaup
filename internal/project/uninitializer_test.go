@@ -2,14 +2,23 @@ package project
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 )
 
 type fakeConfigRemover struct {
+	config  Config
+	found   bool
+	start   string
 	root    string
 	path    string
 	removed bool
+}
+
+func (r *fakeConfigRemover) Find(start string) (Config, string, bool, error) {
+	r.start = start
+	return r.config, r.path, r.found, nil
 }
 
 func (r *fakeConfigRemover) Delete(root string) (string, bool, error) {
@@ -21,7 +30,12 @@ func TestUninitializerRemovesCurrentProjectConfiguration(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	store := &fakeConfigRemover{path: filepath.Join("config", "project.json"), removed: true}
+	store := &fakeConfigRemover{
+		config:  Config{ProjectRoot: root},
+		found:   true,
+		path:    filepath.Join("config", "project.json"),
+		removed: true,
+	}
 	uninitializer := NewUninitializer(store)
 	var events []ProgressEvent
 
@@ -43,6 +57,9 @@ func TestUninitializerRemovesCurrentProjectConfiguration(t *testing.T) {
 	}
 	if store.root != wantRoot {
 		t.Errorf("Delete() root = %q, want %q", store.root, wantRoot)
+	}
+	if store.start != wantRoot {
+		t.Errorf("Find() start = %q, want %q", store.start, wantRoot)
 	}
 
 	wantEvents := []ProgressEvent{
@@ -77,7 +94,43 @@ func TestUninitializerSucceedsWhenConfigurationDoesNotExist(t *testing.T) {
 	if removed {
 		t.Fatal("Uninitialize() removed = true, want false")
 	}
+	if store.root != "" {
+		t.Errorf("Delete() root = %q, want no call", store.root)
+	}
 	if lastEvent.State != ProgressSucceeded || lastEvent.Message != "No saved configuration found" {
 		t.Errorf("last progress event = %#v", lastEvent)
+	}
+}
+
+func TestUninitializerRemovesProjectConfigurationFromDescendant(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	descendant := filepath.Join(root, "module", "src")
+	if err := os.MkdirAll(descendant, 0o750); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	store := NewConfigStore(filepath.Join(t.TempDir(), "projects"))
+	if _, err := store.Save(Config{
+		SchemaVersion: currentSchemaVersion,
+		ProjectRoot:   root,
+	}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	uninitializer := NewUninitializer(store)
+	_, removed, err := uninitializer.Uninitialize(context.Background(), descendant, nil)
+	if err != nil {
+		t.Fatalf("Uninitialize() error = %v", err)
+	}
+	if !removed {
+		t.Fatal("Uninitialize() removed = false, want true")
+	}
+	_, _, found, err := store.Load(root)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if found {
+		t.Fatal("Load() found = true, want removed parent project configuration")
 	}
 }

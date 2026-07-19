@@ -119,8 +119,9 @@ the project has no selected alias is safe.
 executable, the JDK used by `jup run`, and the Maven settings selection. Maven
 projects without a selected alias display `default`.
 
-`jup uninit` removes the saved configuration for the current project. Repeated
-execution is safe when the project has already been uninitialized.
+`jup uninit` searches the current directory and its parents, then removes the
+saved configuration for the nearest initialized project. Running it when no
+initialized project can be found is safe.
 
 The standard `--help`, `-h`, `--version`, and `-v` flags are also supported.
 
