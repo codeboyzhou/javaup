@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -65,6 +66,11 @@ func (d *Detector) Detect(ctx context.Context, root string) (buildtool.Detection
 	}
 
 	wrapperExecutable, hasWrapper := findWrapper(root)
+	executable := "mvn"
+	if hasWrapper {
+		executable = wrapperExecutable
+	}
+	executable = resolveExecutable(executable)
 	version := ""
 	runtimeJava := buildtool.JavaRuntime{}
 	if hasWrapper {
@@ -75,10 +81,6 @@ func (d *Detector) Detect(ctx context.Context, root string) (buildtool.Detection
 	}
 
 	if version == "" {
-		executable := "mvn"
-		if hasWrapper {
-			executable = wrapperExecutable
-		}
 		output, runErr := d.runner.Run(ctx, root, executable)
 		if runErr != nil {
 			return buildtool.Detection{}, true, runErr
@@ -91,16 +93,29 @@ func (d *Detector) Detect(ctx context.Context, root string) (buildtool.Detection
 
 	return buildtool.Detection{
 		Tool: buildtool.Info{
-			Type:    buildtool.Maven,
-			Version: version,
-			Wrapper: buildtool.Wrapper{
-				Enabled:    hasWrapper,
-				Executable: wrapperExecutable,
-			},
+			Type:       buildtool.Maven,
+			Version:    version,
+			Executable: executable,
+			Wrapper:    hasWrapper,
 		},
 		BuildJavaVersion: javaVersion,
 		RuntimeJava:      runtimeJava,
 	}, true, nil
+}
+
+func resolveExecutable(executable string) string {
+	resolved, err := exec.LookPath(executable)
+	if err != nil {
+		resolved = executable
+	}
+	absolute, err := filepath.Abs(resolved)
+	if err == nil {
+		resolved = absolute
+	}
+	if evaluated, err := filepath.EvalSymlinks(resolved); err == nil {
+		resolved = evaluated
+	}
+	return filepath.Clean(resolved)
 }
 
 func findWrapper(root string) (string, bool) {

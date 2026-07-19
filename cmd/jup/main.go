@@ -19,6 +19,7 @@ func main() {
 		Version:     info.Version,
 		Platform:    info.Platform,
 		Commit:      info.Commit,
+		Stdin:       os.Stdin,
 		Stdout:      os.Stdout,
 		Stderr:      os.Stderr,
 	})

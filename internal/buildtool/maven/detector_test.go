@@ -40,8 +40,11 @@ func TestDetectorDetectsMavenWrapper(t *testing.T) {
 	if detection.Tool.Version != "3.9.11" {
 		t.Errorf("Maven version = %q, want %q", detection.Tool.Version, "3.9.11")
 	}
-	if !detection.Tool.Wrapper.Enabled {
-		t.Error("Wrapper.Enabled = false, want true")
+	if !detection.Tool.Wrapper {
+		t.Error("Wrapper = false, want true")
+	}
+	if !filepath.IsAbs(detection.Tool.Executable) {
+		t.Errorf("Maven executable = %q, want an absolute path", detection.Tool.Executable)
 	}
 	if detection.BuildJavaVersion != "17" {
 		t.Errorf("BuildJavaVersion = %q, want %q", detection.BuildJavaVersion, "17")
@@ -69,8 +72,11 @@ func TestDetectorUsesInstalledMaven(t *testing.T) {
 	if detection.Tool.Version != "3.9.9" {
 		t.Errorf("Maven version = %q, want %q", detection.Tool.Version, "3.9.9")
 	}
-	if detection.Tool.Wrapper.Enabled {
-		t.Error("Wrapper.Enabled = true, want false")
+	if detection.Tool.Wrapper {
+		t.Error("Wrapper = true, want false")
+	}
+	if !filepath.IsAbs(detection.Tool.Executable) {
+		t.Errorf("Maven executable = %q, want an absolute path", detection.Tool.Executable)
 	}
 	if detection.BuildJavaVersion != "21" {
 		t.Errorf("BuildJavaVersion = %q, want %q", detection.BuildJavaVersion, "21")

@@ -5,6 +5,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestAppRun(t *testing.T) {
@@ -20,7 +22,7 @@ func TestAppRun(t *testing.T) {
 		{
 			name:       "no arguments shows help",
 			wantCode:   exitSuccess,
-			wantOutput: []string{"Usage:\n  jup [flags]", "help", "version"},
+			wantOutput: []string{"Usage:\n  jup [flags]", "help", "run", "version"},
 		},
 		{
 			name:       "help command shows help",
@@ -95,6 +97,45 @@ func TestAppRun(t *testing.T) {
 			assertContains(t, stdout.String(), tt.wantOutput)
 			assertContains(t, stderr.String(), tt.wantError)
 		})
+	}
+}
+
+type testExitError struct {
+	code int
+}
+
+func (e testExitError) Error() string {
+	return "command failed"
+}
+
+func (e testExitError) ExitCode() int {
+	return e.code
+}
+
+func TestAppReturnsChildProcessExitCodeWithoutDuplicateError(t *testing.T) {
+	t.Parallel()
+
+	var stderr bytes.Buffer
+	root := newRootCommand(Options{
+		Name:        "jup",
+		ProductName: "javaup",
+		Description: "test",
+		Stdout:      &bytes.Buffer{},
+		Stderr:      &stderr,
+	})
+	root.AddCommand(&cobra.Command{
+		Use: "failure",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return testExitError{code: 23}
+		},
+	})
+	app := &App{root: root, stderr: &stderr}
+
+	if got := app.Run(context.Background(), []string{"failure"}); got != 23 {
+		t.Errorf("Run() exit code = %d, want 23", got)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("Run() stderr = %q, want empty", stderr.String())
 	}
 }
 

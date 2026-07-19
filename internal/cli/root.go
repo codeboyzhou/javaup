@@ -20,12 +20,16 @@ func newRootCommand(options Options) *cobra.Command {
 	}
 	root.SetOut(options.Stdout)
 	root.SetErr(options.Stderr)
+	if options.Stdin != nil {
+		root.SetIn(options.Stdin)
+	}
 	root.SetVersionTemplate("{{.Version}}\n")
 
 	// Register top-level commands here. Command-specific dependencies should be
 	// passed into their constructors instead of accessed through global state.
 	root.AddCommand(newInitCommand(defaultInitializerFactory, defaultWorkingDirectory))
 	root.AddCommand(newUninitCommand(defaultUninitializerFactory, defaultWorkingDirectory))
+	root.AddCommand(newRunCommand(defaultRunnerFactory, defaultWorkingDirectory))
 	root.AddCommand(newVersionCommand(version))
 
 	return root

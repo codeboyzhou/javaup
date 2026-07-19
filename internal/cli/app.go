@@ -3,6 +3,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -22,6 +23,7 @@ type Options struct {
 	Version     string
 	Platform    string
 	Commit      string
+	Stdin       io.Reader
 	Stdout      io.Writer
 	Stderr      io.Writer
 }
@@ -46,9 +48,20 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	a.root.SetArgs(args)
 
 	if err := a.root.ExecuteContext(ctx); err != nil {
+		if code, ok := commandExitCode(err); ok && code > 0 {
+			return code
+		}
 		_, _ = fmt.Fprintf(a.stderr, "%s: %v\n", a.root.Name(), err)
 		return exitFailure
 	}
 
 	return exitSuccess
+}
+
+func commandExitCode(err error) (int, bool) {
+	var exitCoder interface{ ExitCode() int }
+	if !errors.As(err, &exitCoder) {
+		return 0, false
+	}
+	return exitCoder.ExitCode(), true
 }

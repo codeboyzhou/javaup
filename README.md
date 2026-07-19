@@ -48,6 +48,7 @@ javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 
 ```text
 jup init
+jup run mvn [arguments...]
 jup uninit
 jup help [command]
 jup version
@@ -65,7 +66,18 @@ Linux:   $XDG_CONFIG_HOME/javaup/projects (or ~/.config/javaup/projects)
 
 Initialization reports each detection stage with cross-platform colored output
 when running in an interactive terminal. Setting `NO_COLOR` disables colors.
-The `initializedAt` value uses the local `YYYY-MM-DD HH:mm:ss` format.
+The `initializedAt` value uses RFC 3339 with the local UTC offset, for example
+`2026-07-19T01:29:08+08:00`.
+
+`jup run mvn` executes the exact Maven executable detected during
+initialization, including Maven Wrapper when present. It sets `JAVA_HOME` and
+puts the saved JDK's `bin` directory first on `PATH` for the child process
+without modifying the calling shell. The command may be run from any directory
+below the initialized project root:
+
+```shell
+jup run mvn clean package
+```
 
 `jup uninit` removes the saved configuration for the current project. Repeated
 execution is safe when the project has already been uninitialized.

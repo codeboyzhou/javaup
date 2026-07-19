@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-func TestLocalTimestampUnmarshalsLegacyRFC3339(t *testing.T) {
+func TestConfigUnmarshalsRFC3339InitializedAt(t *testing.T) {
 	t.Parallel()
 
-	var timestamp LocalTimestamp
-	if err := json.Unmarshal([]byte(`"2026-07-19T00:04:05+08:00"`), &timestamp); err != nil {
+	var config Config
+	if err := json.Unmarshal([]byte(`{"initializedAt":"2026-07-19T01:29:08+08:00"}`), &config); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
-	if got, want := timestamp.Format(time.RFC3339), "2026-07-19T00:04:05+08:00"; got != want {
+	if got, want := config.InitializedAt.Format(time.RFC3339), "2026-07-19T01:29:08+08:00"; got != want {
 		t.Errorf("timestamp = %q, want %q", got, want)
 	}
 }

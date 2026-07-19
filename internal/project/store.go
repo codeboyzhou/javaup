@@ -67,6 +67,61 @@ func (s *ConfigStore) Save(config Config) (string, error) {
 	return path, nil
 }
 
+// Load reads the configuration associated with projectRoot.
+func (s *ConfigStore) Load(projectRoot string) (config Config, path string, found bool, err error) {
+	path = filepath.Join(s.baseDir, configFileName(projectRoot))
+	// #nosec G304 -- path is derived from the configured store directory and a hashed project identity.
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Config{}, path, false, nil
+		}
+		return Config{}, path, false, fmt.Errorf("read project configuration: %w", err)
+	}
+	if err := json.Unmarshal(content, &config); err != nil {
+		return Config{}, path, true, fmt.Errorf("decode project configuration %s: %w", path, err)
+	}
+	if config.SchemaVersion != currentSchemaVersion {
+		return Config{}, path, true, fmt.Errorf(
+			"project configuration schema %d is unsupported; run jup init again",
+			config.SchemaVersion,
+		)
+	}
+
+	canonicalRoot, err := canonicalProjectRoot(projectRoot)
+	if err != nil {
+		return Config{}, path, true, err
+	}
+	configuredRoot, err := canonicalProjectRoot(config.ProjectRoot)
+	if err != nil {
+		return Config{}, path, true, fmt.Errorf("resolve configured project root: %w", err)
+	}
+	if !samePath(canonicalRoot, configuredRoot) {
+		return Config{}, path, true, fmt.Errorf("project configuration root is %s, want %s", configuredRoot, canonicalRoot)
+	}
+	config.ProjectRoot = configuredRoot
+	return config, path, true, nil
+}
+
+// Find searches start and its parents for an initialized project.
+func (s *ConfigStore) Find(start string) (config Config, path string, found bool, err error) {
+	directory, err := canonicalProjectRoot(start)
+	if err != nil {
+		return Config{}, "", false, err
+	}
+	for {
+		config, path, found, err = s.Load(directory)
+		if err != nil || found {
+			return config, path, found, err
+		}
+		parent := filepath.Dir(directory)
+		if samePath(parent, directory) {
+			return Config{}, path, false, nil
+		}
+		directory = parent
+	}
+}
+
 // Delete removes the configuration associated with projectRoot.
 func (s *ConfigStore) Delete(projectRoot string) (path string, removed bool, err error) {
 	path = filepath.Join(s.baseDir, configFileName(projectRoot))
@@ -101,4 +156,11 @@ func sanitizeName(value string) string {
 		return "project"
 	}
 	return value
+}
+
+func samePath(left, right string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(left, right)
+	}
+	return left == right
 }

@@ -44,14 +44,14 @@ func TestInitializerCoordinatesDetectionAndStorage(t *testing.T) {
 		Tool: buildtool.Info{
 			Type:    buildtool.Maven,
 			Version: "3.9.11",
-			Wrapper: buildtool.Wrapper{Enabled: true, Executable: "mvnw"},
+			Wrapper: true,
 		},
 		BuildJavaVersion: "17",
 	}
 	java := &fakeJavaLocator{result: javainfo.Installation{Version: "17", Home: "/jdk-17"}}
 	store := &fakeConfigStore{path: "/config/project.json"}
 	initializer := NewInitializer([]buildtool.Detector{fakeDetector{detection: detection}}, java, store)
-	initializedAt := time.Date(2026, 7, 18, 12, 0, 0, 0, time.FixedZone("test", 8*60*60))
+	initializedAt := time.Date(2026, 7, 18, 12, 0, 0, 987654321, time.FixedZone("test", 8*60*60))
 	initializer.now = func() time.Time { return initializedAt }
 	var events []ProgressEvent
 
@@ -67,8 +67,8 @@ func TestInitializerCoordinatesDetectionAndStorage(t *testing.T) {
 	if config.Java.Home != "/jdk-17" {
 		t.Errorf("Java home = %q, want %q", config.Java.Home, "/jdk-17")
 	}
-	if config.InitializedAt.Time != initializedAt {
-		t.Errorf("InitializedAt = %v, want %v", config.InitializedAt, initializedAt)
+	if want := initializedAt.Truncate(time.Second); !config.InitializedAt.Equal(want) {
+		t.Errorf("InitializedAt = %v, want %v", config.InitializedAt, want)
 	}
 	if path != store.path {
 		t.Errorf("path = %q, want %q", path, store.path)
@@ -137,9 +137,7 @@ func TestBuildToolProgressMessageIdentifiesSource(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			info := buildtool.Info{
-				Type: buildtool.Maven, Version: "3.9.16", Wrapper: buildtool.Wrapper{Enabled: test.wrapper},
-			}
+			info := buildtool.Info{Type: buildtool.Maven, Version: "3.9.16", Wrapper: test.wrapper}
 			if got := buildToolProgressMessage(info); got != test.want {
 				t.Errorf("buildToolProgressMessage() = %q, want %q", got, test.want)
 			}

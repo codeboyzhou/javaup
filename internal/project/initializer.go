@@ -126,7 +126,7 @@ func (i *Initializer) Initialize(ctx context.Context, root string, progress Prog
 		ProjectRoot:   canonicalRoot,
 		BuildTool:     detection.Tool,
 		Java:          java,
-		InitializedAt: NewLocalTimestamp(i.now()),
+		InitializedAt: i.now().Truncate(time.Second),
 	}
 	reportProgress(progress, ProgressEvent{
 		Step: 5, Total: initializationSteps, Name: configStepName, State: ProgressStarted,
@@ -143,7 +143,7 @@ func (i *Initializer) Initialize(ctx context.Context, root string, progress Prog
 
 func buildToolProgressMessage(info buildtool.Info) string {
 	source := "PATH"
-	if info.Wrapper.Enabled {
+	if info.Wrapper {
 		source = "wrapper"
 	}
 	return fmt.Sprintf("%s %s (%s)", info.Type.DisplayName(), info.Version, source)

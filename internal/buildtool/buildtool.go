@@ -21,17 +21,12 @@ func (t Type) DisplayName() string {
 	}
 }
 
-// Wrapper describes a project-local build tool wrapper.
-type Wrapper struct {
-	Enabled    bool   `json:"enabled"`
-	Executable string `json:"executable,omitempty"`
-}
-
 // Info contains the detected build tool configuration.
 type Info struct {
-	Type    Type    `json:"type"`
-	Version string  `json:"version"`
-	Wrapper Wrapper `json:"wrapper"`
+	Type       Type   `json:"type"`
+	Version    string `json:"version"`
+	Executable string `json:"executable"`
+	Wrapper    bool   `json:"wrapper"`
 }
 
 // JavaRuntime describes the Java runtime used to launch a build tool.
