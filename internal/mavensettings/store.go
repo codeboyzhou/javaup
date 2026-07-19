@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -86,6 +87,22 @@ func (s *Store) Resolve(alias string) (Entry, error) {
 		return Entry{}, fmt.Errorf("resolve Maven settings alias %q: %w", alias, err)
 	}
 	return Entry{Alias: alias, Path: settingsPath}, nil
+}
+
+// List returns all saved Maven settings aliases ordered by alias.
+func (s *Store) List() ([]Entry, error) {
+	config, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]Entry, 0, len(config.Aliases))
+	for alias, settingsPath := range config.Aliases {
+		entries = append(entries, Entry{Alias: alias, Path: settingsPath})
+	}
+	sort.Slice(entries, func(left, right int) bool {
+		return entries[left].Alias < entries[right].Alias
+	})
+	return entries, nil
 }
 
 func (s *Store) load() (registry, error) {

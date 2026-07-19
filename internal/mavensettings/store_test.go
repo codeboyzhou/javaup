@@ -57,6 +57,21 @@ func TestStoreAddsAndUpdatesAliases(t *testing.T) {
 	if entry.Alias != "intranet" || entry.Path != secondPath {
 		t.Errorf("Resolve() entry = %#v, want intranet/%s", entry, secondPath)
 	}
+
+	entries, err := store.List()
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(entries) != 2 || entries[0].Alias != "google" || entries[1].Alias != "intranet" {
+		t.Errorf("List() entries = %#v, want aliases ordered as google, intranet", entries)
+	}
+	if err := os.Remove(secondPath); err != nil {
+		t.Fatalf("Remove() error = %v", err)
+	}
+	entries, err = store.List()
+	if err != nil || len(entries) != 2 {
+		t.Errorf("List() stale entries/error = %#v/%v, want both saved mappings", entries, err)
+	}
 }
 
 func TestStoreRejectsUnknownAlias(t *testing.T) {

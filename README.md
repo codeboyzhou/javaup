@@ -50,6 +50,7 @@ javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 jup init
 jup run mvn [arguments...]
 jup settings add <alias> <path>
+jup settings list
 jup settings use <alias>
 jup status
 jup uninit
@@ -91,6 +92,9 @@ existing alias updates its path:
 jup settings add intranet /path/to/settings-intranet.xml
 jup settings add google /path/to/settings-google.xml
 ```
+
+`jup settings list` displays all saved aliases and their settings file paths in
+a table ordered by alias.
 
 `jup settings use` associates the current initialized Maven project with a
 saved alias. Subsequent `jup run mvn` commands resolve the alias and pass its
