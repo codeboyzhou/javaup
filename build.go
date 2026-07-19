@@ -14,10 +14,11 @@ import (
 )
 
 type buildStep struct {
-	name        string
-	description string
-	program     string
-	args        []string
+	name          string
+	description   string
+	program       string
+	args          []string
+	requireSilent bool
 }
 
 type palette struct {
@@ -40,16 +41,47 @@ const separator = "-------------------------------------------------------------
 func main() {
 	colors := newPalette()
 	started := time.Now()
-	result, err := runBuild(colors)
-	printSummary(colors, started, result, err)
+	verifyOnly, err := parseBuildMode(os.Args[1:])
+	if err != nil {
+		printSummary(colors, started, verifyOnly, buildResult{}, err)
+		printUsage(os.Stderr)
+		os.Exit(2)
+	}
+
+	result, err := runBuild(colors, verifyOnly)
+	printSummary(colors, started, verifyOnly, result, err)
 	if err != nil {
 		os.Exit(1)
 	}
 }
 
-func runBuild(colors palette) (buildResult, error) {
+func parseBuildMode(arguments []string) (verifyOnly bool, err error) {
+	if len(arguments) == 0 {
+		return false, nil
+	}
+	if len(arguments) == 1 && arguments[0] == "verify" {
+		return true, nil
+	}
+	return false, fmt.Errorf("invalid build arguments: %s", strings.Join(arguments, " "))
+}
+
+func printUsage(writer io.Writer) {
+	_, _ = fmt.Fprintln(writer, `Usage:
+  go run build.go
+  go run build.go verify`)
+}
+
+func runBuild(colors palette, verifyOnly bool) (buildResult, error) {
 	if _, err := os.Stat("go.mod"); err != nil {
 		return buildResult{}, fmt.Errorf("run this script from the repository root: %w", err)
+	}
+
+	steps := verificationSteps()
+	if verifyOnly {
+		printInfo(colors, colors.heading, separator)
+		printInfo(colors, colors.heading, "VERIFYING JUP")
+		printInfo(colors, colors.heading, separator)
+		return executeSteps(colors, steps, buildResult{})
 	}
 
 	goos, goarch, err := targetPlatform()
@@ -63,12 +95,30 @@ func runBuild(colors palette) (buildResult, error) {
 		return result, fmt.Errorf("create output directory: %w", err)
 	}
 
-	steps := []buildStep{
+	steps = append(steps, buildStep{
+		name:        "Build",
+		description: "Building the jup executable",
+		program:     "go",
+		args:        []string{"build", "-trimpath", "-o", artifact, "./cmd/jup"},
+	})
+
+	printInfo(colors, colors.heading, separator)
+	printInfo(colors, colors.heading, "BUILDING JUP")
+	printInfo(colors, colors.heading, separator)
+	printInfo(colors, nil, "Target:   %s", goos+"/"+goarch)
+	printInfo(colors, nil, "Artifact: %s", artifact)
+
+	return executeSteps(colors, steps, result)
+}
+
+func verificationSteps() []buildStep {
+	return []buildStep{
 		{
-			name:        "Format",
-			description: "Formatting Go source files",
-			program:     "go",
-			args:        []string{"fmt", "./..."},
+			name:          "Format",
+			description:   "Checking Go source formatting",
+			program:       "gofmt",
+			args:          []string{"-l", "."},
+			requireSilent: true,
 		},
 		{
 			name:        "Vet",
@@ -94,20 +144,10 @@ func runBuild(colors palette) (buildResult, error) {
 			program:     "go",
 			args:        []string{"tool", "-modfile=govulncheck.mod", "govulncheck", "./..."},
 		},
-		{
-			name:        "Build",
-			description: "Building the jup executable",
-			program:     "go",
-			args:        []string{"build", "-trimpath", "-o", artifact, "./cmd/jup"},
-		},
 	}
+}
 
-	printInfo(colors, colors.heading, separator)
-	printInfo(colors, colors.heading, "BUILDING JUP")
-	printInfo(colors, colors.heading, separator)
-	printInfo(colors, nil, "Target:   %s", goos+"/"+goarch)
-	printInfo(colors, nil, "Artifact: %s", artifact)
-
+func executeSteps(colors palette, steps []buildStep, result buildResult) (buildResult, error) {
 	for index, step := range steps {
 		printInfo(colors, nil, "")
 		if err := runStep(colors, index+1, len(steps), step); err != nil {
@@ -129,8 +169,18 @@ func runStep(colors palette, index, total int, step buildStep) error {
 	// #nosec G204 -- every command and argument is defined by the build script.
 	command := exec.Command(step.program, step.args...)
 	command.Stdin = os.Stdin
-	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
+	if step.requireSilent {
+		output, err := command.Output()
+		if err != nil {
+			return fmt.Errorf("%s step: %w", strings.ToLower(step.name), err)
+		}
+		if output := strings.TrimSpace(string(output)); output != "" {
+			return fmt.Errorf("%s step: files require formatting:\n%s", strings.ToLower(step.name), output)
+		}
+		return nil
+	}
+	command.Stdout = os.Stdout
 
 	if err := command.Run(); err != nil {
 		return fmt.Errorf("%s step: %w", strings.ToLower(step.name), err)
@@ -138,16 +188,20 @@ func runStep(colors palette, index, total int, step buildStep) error {
 	return nil
 }
 
-func printSummary(colors palette, started time.Time, result buildResult, buildErr error) {
+func printSummary(colors palette, started time.Time, verifyOnly bool, result buildResult, buildErr error) {
 	writer := io.Writer(os.Stdout)
 	prefix := colors.info
 	status := colors.success
-	outcome := "BUILD SUCCESS"
+	operation := "BUILD"
+	if verifyOnly {
+		operation = "VERIFICATION"
+	}
+	outcome := operation + " SUCCESS"
 	if buildErr != nil {
 		writer = os.Stderr
 		prefix = colors.error
 		status = colors.failure
-		outcome = "BUILD FAILURE"
+		outcome = operation + " FAILURE"
 	}
 
 	printLog(writer, colors, prefix, status, separator)

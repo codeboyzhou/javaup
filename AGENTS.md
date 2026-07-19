@@ -6,9 +6,10 @@ When committing code, you MUST follow these rules:
 
 Use Conventional Commits:
 
-<type>(<scope>): <subject>
+`<type>(<scope>): <subject>`
 
 Allowed types:
+
 - feat
 - fix
 - docs
@@ -27,6 +28,7 @@ feat(auth): add oauth login support
 fix(order): prevent duplicate payment processing
 
 Rules:
+
 - subject must be lowercase
 - subject max length 72 chars
 - no period at the end
@@ -34,5 +36,6 @@ Rules:
 - commit message must be written in English
 
 Before committing:
+
 - run git diff --cached
 - verify commit message format

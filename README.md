@@ -10,10 +10,16 @@ Run the complete local build pipeline:
 go run build.go
 ```
 
+Run the same checks without producing a binary artifact:
+
+```shell
+go run build.go verify
+```
+
 The script stops on the first failure and runs these stages in order:
 
 ```text
-go fmt ./...
+gofmt -l .
 go vet ./...
 go tool -modfile=golangci-lint.mod golangci-lint run
 go test ./...
