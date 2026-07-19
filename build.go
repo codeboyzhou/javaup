@@ -204,9 +204,9 @@ func newPalette() palette {
 
 	return palette{
 		info:    style(color.Bold, color.FgBlue),
-		error:   style(color.FgRed),
+		error:   style(color.Bold, color.FgRed),
 		heading: style(color.Bold, color.FgGreen),
-		stage:   style(color.FgGreen),
+		stage:   style(color.Bold, color.FgGreen),
 		command: style(color.Faint, color.FgWhite),
 		success: style(color.Bold, color.FgGreen),
 		failure: style(color.Bold, color.FgRed),
