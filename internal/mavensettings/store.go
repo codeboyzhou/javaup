@@ -105,6 +105,28 @@ func (s *Store) List() ([]Entry, error) {
 	return entries, nil
 }
 
+// Remove deletes the saved Maven settings alias and returns its former mapping.
+func (s *Store) Remove(alias string) (Entry, error) {
+	alias, err := validateAlias(alias)
+	if err != nil {
+		return Entry{}, err
+	}
+	config, err := s.load()
+	if err != nil {
+		return Entry{}, err
+	}
+	settingsPath, found := config.Aliases[alias]
+	if !found {
+		return Entry{}, fmt.Errorf("maven settings alias %q is not configured", alias)
+	}
+
+	delete(config.Aliases, alias)
+	if err := s.save(config); err != nil {
+		return Entry{}, err
+	}
+	return Entry{Alias: alias, Path: settingsPath}, nil
+}
+
 func (s *Store) load() (registry, error) {
 	content, err := os.ReadFile(s.path) // #nosec G304 -- path belongs to the configured Maven settings store.
 	if err != nil {

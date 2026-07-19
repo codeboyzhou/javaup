@@ -51,6 +51,7 @@ jup init
 jup run mvn [arguments...]
 jup settings add <alias> <path>
 jup settings list
+jup settings remove <alias>
 jup settings use <alias>
 jup status
 jup uninit
@@ -95,6 +96,9 @@ jup settings add google /path/to/settings-google.xml
 
 `jup settings list` displays all saved aliases and their settings file paths in
 a table ordered by alias.
+
+`jup settings remove` deletes a saved alias and reports the removed settings
+file path.
 
 `jup settings use` associates the current initialized Maven project with a
 saved alias. Subsequent `jup run mvn` commands resolve the alias and pass its

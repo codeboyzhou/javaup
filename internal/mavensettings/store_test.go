@@ -83,6 +83,42 @@ func TestStoreRejectsUnknownAlias(t *testing.T) {
 	}
 }
 
+func TestStoreRemovesAlias(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	settingsPath := writeSettingsFile(t, filepath.Join(root, "settings.xml"))
+	googlePath := writeSettingsFile(t, filepath.Join(root, "settings-google.xml"))
+	store := NewStore(filepath.Join(root, "config", "settings.json"))
+	if _, _, err := store.Add("intranet", settingsPath); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	if _, _, err := store.Add("google", googlePath); err != nil {
+		t.Fatalf("Add() second alias error = %v", err)
+	}
+	if err := os.Remove(settingsPath); err != nil {
+		t.Fatalf("Remove settings file error = %v", err)
+	}
+
+	entry, err := store.Remove("intranet")
+	if err != nil {
+		t.Fatalf("Remove() error = %v", err)
+	}
+	if entry.Alias != "intranet" || entry.Path != settingsPath {
+		t.Errorf("Remove() entry = %#v, want intranet/%s", entry, settingsPath)
+	}
+	entries, err := store.List()
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(entries) != 1 || entries[0].Alias != "google" || entries[0].Path != googlePath {
+		t.Errorf("List() entries = %#v, want only google mapping", entries)
+	}
+	if _, err := store.Remove("intranet"); err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Errorf("Remove() missing error = %v, want not configured", err)
+	}
+}
+
 func TestStoreRejectsInvalidAlias(t *testing.T) {
 	t.Parallel()
 

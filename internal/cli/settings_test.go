@@ -15,6 +15,8 @@ type recordingMavenSettingsStore struct {
 	path         string
 	registryPath string
 	entries      []mavensettings.Entry
+	removedAlias string
+	removedEntry mavensettings.Entry
 }
 
 type recordingProjectMavenSettingsUser struct {
@@ -41,6 +43,11 @@ func (s *recordingMavenSettingsStore) Add(alias, path string) (mavensettings.Ent
 
 func (s *recordingMavenSettingsStore) List() ([]mavensettings.Entry, error) {
 	return append([]mavensettings.Entry(nil), s.entries...), nil
+}
+
+func (s *recordingMavenSettingsStore) Remove(alias string) (mavensettings.Entry, error) {
+	s.removedAlias = alias
+	return s.removedEntry, nil
 }
 
 func TestSettingsAddCommandSavesAlias(t *testing.T) {
@@ -164,5 +171,48 @@ func TestSettingsListCommandHandlesEmptyStore(t *testing.T) {
 	}
 	if got, want := normalizedOutput(output.String()), "No Maven settings aliases configured.\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+func TestSettingsRemoveCommandRemovesAlias(t *testing.T) {
+	t.Parallel()
+
+	store := &recordingMavenSettingsStore{removedEntry: mavensettings.Entry{
+		Alias: "intranet",
+		Path:  "/maven/settings-intranet.xml",
+	}}
+	command := newSettingsCommand(
+		func() (mavenSettingsStore, error) { return store, nil },
+		func() (projectMavenSettingsUser, error) { return &recordingProjectMavenSettingsUser{}, nil },
+		func() (string, error) { return "/projects/demo", nil },
+	)
+	command.SetArgs([]string{"remove", "intranet"})
+	var output bytes.Buffer
+	command.SetOut(&output)
+
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("ExecuteContext() error = %v", err)
+	}
+	if store.removedAlias != "intranet" {
+		t.Errorf("Remove() alias = %q, want intranet", store.removedAlias)
+	}
+	const want = "Removed Maven settings alias \"intranet\" for /maven/settings-intranet.xml.\n"
+	if got := normalizedOutput(output.String()); got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+func TestSettingsRemoveCommandRequiresAlias(t *testing.T) {
+	t.Parallel()
+
+	command := newSettingsCommand(
+		func() (mavenSettingsStore, error) { return &recordingMavenSettingsStore{}, nil },
+		func() (projectMavenSettingsUser, error) { return &recordingProjectMavenSettingsUser{}, nil },
+		func() (string, error) { return "/projects/demo", nil },
+	)
+	command.SetArgs([]string{"remove"})
+
+	if err := command.ExecuteContext(context.Background()); err == nil {
+		t.Fatal("ExecuteContext() error = nil, want argument validation error")
 	}
 }

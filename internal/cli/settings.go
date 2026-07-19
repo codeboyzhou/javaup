@@ -17,6 +17,7 @@ import (
 type mavenSettingsStore interface {
 	Add(alias, path string) (entry mavensettings.Entry, registryPath string, err error)
 	List() ([]mavensettings.Entry, error)
+	Remove(alias string) (mavensettings.Entry, error)
 }
 
 type mavenSettingsFactory func() (mavenSettingsStore, error)
@@ -42,6 +43,7 @@ func newSettingsCommand(
 	}
 	command.AddCommand(newSettingsAddCommand(settingsFactory))
 	command.AddCommand(newSettingsListCommand(settingsFactory))
+	command.AddCommand(newSettingsRemoveCommand(settingsFactory))
 	command.AddCommand(newSettingsUseCommand(projectFactory, workingDirectory))
 	return command
 }
@@ -113,6 +115,34 @@ func newSettingsAddCommand(factory mavenSettingsFactory) *cobra.Command {
 				entry.Alias,
 				entry.Path,
 				registryPath,
+			)
+			_, err = fmt.Fprintln(writer, success.Sprint(message))
+			return err
+		},
+	}
+}
+
+func newSettingsRemoveCommand(factory mavenSettingsFactory) *cobra.Command {
+	return &cobra.Command{
+		Use:   "remove <alias>",
+		Short: "Remove a saved Maven settings alias",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
+			store, err := factory()
+			if err != nil {
+				return err
+			}
+			entry, err := store.Remove(args[0])
+			if err != nil {
+				return err
+			}
+
+			writer := command.OutOrStdout()
+			success := newOutputStyle(writer, color.FgGreen)
+			message := fmt.Sprintf(
+				"Removed Maven settings alias %q for %s.",
+				entry.Alias,
+				entry.Path,
 			)
 			_, err = fmt.Fprintln(writer, success.Sprint(message))
 			return err
