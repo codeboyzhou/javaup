@@ -28,10 +28,11 @@ func TestStatusCommandShowsCurrentProjectToolchain(t *testing.T) {
 	inspector := &recordingProjectInspector{config: project.Config{
 		ProjectRoot: "/projects/demo",
 		BuildTool: buildtool.Info{
-			Type:       buildtool.Maven,
-			Version:    "3.9.11",
-			Executable: "/projects/demo/mvnw",
-			Wrapper:    true,
+			Type:          buildtool.Maven,
+			Version:       "3.9.11",
+			Executable:    "/projects/demo/mvnw",
+			Wrapper:       true,
+			SettingsAlias: "intranet",
 		},
 		Java: javainfo.Installation{Version: "17.0.12", Home: "/jdks/17"},
 	}}
@@ -53,6 +54,7 @@ func TestStatusCommandShowsCurrentProjectToolchain(t *testing.T) {
 		"Build executable: /projects/demo/mvnw",
 		"Java version: 17.0.12",
 		"Java home: /jdks/17",
+		"Maven settings: intranet",
 	})
 }
 

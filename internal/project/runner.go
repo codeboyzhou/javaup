@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/codeboyzhou/javaup/internal/buildtool"
+	"github.com/codeboyzhou/javaup/internal/mavensettings"
 )
 
 // Streams are connected directly to a command started by Runner.
@@ -48,6 +49,7 @@ func (osProcessExecutor) Execute(ctx context.Context, spec processSpec) error {
 // Runner executes a project's detected build tool with its saved Java environment.
 type Runner struct {
 	store    configFinder
+	settings mavenSettingsResolver
 	executor processExecutor
 }
 
@@ -57,12 +59,25 @@ func NewDefaultRunner() (*Runner, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewRunner(store, osProcessExecutor{}), nil
+	settings, err := mavensettings.NewDefaultStore()
+	if err != nil {
+		return nil, err
+	}
+	return NewRunnerWithMavenSettings(store, settings, osProcessExecutor{}), nil
 }
 
 // NewRunner creates a project command runner from replaceable services.
 func NewRunner(store configFinder, executor processExecutor) *Runner {
 	return &Runner{store: store, executor: executor}
+}
+
+// NewRunnerWithMavenSettings creates a runner that resolves saved Maven settings aliases.
+func NewRunnerWithMavenSettings(
+	store configFinder,
+	settings mavenSettingsResolver,
+	executor processExecutor,
+) *Runner {
+	return &Runner{store: store, settings: settings, executor: executor}
 }
 
 // Run executes the requested build tool saved for the project containing root.
@@ -88,6 +103,10 @@ func (r *Runner) Run(
 	if err := validateExecutable(executable, tool); err != nil {
 		return err
 	}
+	args, err = r.configuredBuildToolArguments(config, tool, args)
+	if err != nil {
+		return err
+	}
 	directory, err := filepath.Abs(root)
 	if err != nil {
 		return fmt.Errorf("resolve command directory: %w", err)
@@ -108,6 +127,28 @@ func (r *Runner) Run(
 		return err
 	}
 	return fmt.Errorf("run %s: %w", tool.DisplayName(), err)
+}
+
+func (r *Runner) configuredBuildToolArguments(
+	config Config,
+	tool buildtool.Type,
+	args []string,
+) ([]string, error) {
+	arguments := append([]string(nil), args...)
+	if tool != buildtool.Maven || strings.TrimSpace(config.BuildTool.SettingsAlias) == "" {
+		return arguments, nil
+	}
+	if r.settings == nil {
+		return nil, fmt.Errorf(
+			"project uses Maven settings alias %q but no settings resolver is configured",
+			config.BuildTool.SettingsAlias,
+		)
+	}
+	entry, err := r.settings.Resolve(config.BuildTool.SettingsAlias)
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{"--settings", entry.Path}, arguments...), nil
 }
 
 func configuredBuildToolExecutable(config Config, tool buildtool.Type) (string, error) {

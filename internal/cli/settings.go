@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codeboyzhou/javaup/internal/mavensettings"
+	"github.com/codeboyzhou/javaup/internal/project"
 )
 
 type mavenSettingsAdder interface {
@@ -15,7 +16,17 @@ type mavenSettingsAdder interface {
 
 type mavenSettingsFactory func() (mavenSettingsAdder, error)
 
-func newSettingsCommand(factory mavenSettingsFactory) *cobra.Command {
+type projectMavenSettingsUser interface {
+	Use(root, alias string) (project.Config, mavensettings.Entry, error)
+}
+
+type projectMavenSettingsFactory func() (projectMavenSettingsUser, error)
+
+func newSettingsCommand(
+	settingsFactory mavenSettingsFactory,
+	projectFactory projectMavenSettingsFactory,
+	workingDirectory func() (string, error),
+) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "settings",
 		Short: "Manage named Maven settings files",
@@ -24,7 +35,8 @@ func newSettingsCommand(factory mavenSettingsFactory) *cobra.Command {
 			return command.Help()
 		},
 	}
-	command.AddCommand(newSettingsAddCommand(factory))
+	command.AddCommand(newSettingsAddCommand(settingsFactory))
+	command.AddCommand(newSettingsUseCommand(projectFactory, workingDirectory))
 	return command
 }
 
@@ -56,6 +68,46 @@ func newSettingsAddCommand(factory mavenSettingsFactory) *cobra.Command {
 	}
 }
 
+func newSettingsUseCommand(
+	factory projectMavenSettingsFactory,
+	workingDirectory func() (string, error),
+) *cobra.Command {
+	return &cobra.Command{
+		Use:   "use <alias>",
+		Short: "Use a Maven settings alias for the current project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
+			root, err := workingDirectory()
+			if err != nil {
+				return fmt.Errorf("resolve current directory: %w", err)
+			}
+			manager, err := factory()
+			if err != nil {
+				return err
+			}
+			config, entry, err := manager.Use(root, args[0])
+			if err != nil {
+				return err
+			}
+
+			writer := command.OutOrStdout()
+			success := newOutputStyle(writer, color.FgGreen)
+			message := fmt.Sprintf(
+				"Configured project %s to use Maven settings alias %q at %s.",
+				config.ProjectRoot,
+				entry.Alias,
+				entry.Path,
+			)
+			_, err = fmt.Fprintln(writer, success.Sprint(message))
+			return err
+		},
+	}
+}
+
 func defaultMavenSettingsFactory() (mavenSettingsAdder, error) {
 	return mavensettings.NewDefaultStore()
+}
+
+func defaultProjectMavenSettingsFactory() (projectMavenSettingsUser, error) {
+	return project.NewDefaultMavenSettingsManager()
 }

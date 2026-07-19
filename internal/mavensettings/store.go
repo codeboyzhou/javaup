@@ -67,6 +67,27 @@ func (s *Store) Add(alias, settingsPath string) (Entry, string, error) {
 	return Entry{Alias: alias, Path: settingsPath}, s.path, nil
 }
 
+// Resolve returns the valid Maven settings file currently saved for alias.
+func (s *Store) Resolve(alias string) (Entry, error) {
+	alias, err := validateAlias(alias)
+	if err != nil {
+		return Entry{}, err
+	}
+	config, err := s.load()
+	if err != nil {
+		return Entry{}, err
+	}
+	settingsPath, found := config.Aliases[alias]
+	if !found {
+		return Entry{}, fmt.Errorf("maven settings alias %q is not configured; run jup settings add", alias)
+	}
+	settingsPath, err = validateSettingsFile(settingsPath)
+	if err != nil {
+		return Entry{}, fmt.Errorf("resolve Maven settings alias %q: %w", alias, err)
+	}
+	return Entry{Alias: alias, Path: settingsPath}, nil
+}
+
 func (s *Store) load() (registry, error) {
 	content, err := os.ReadFile(s.path) // #nosec G304 -- path belongs to the configured Maven settings store.
 	if err != nil {

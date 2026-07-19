@@ -5,12 +5,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/codeboyzhou/javaup/internal/buildtool"
 	"github.com/codeboyzhou/javaup/internal/javainfo"
+	"github.com/codeboyzhou/javaup/internal/mavensettings"
 )
 
 type fakeConfigFinder struct {
@@ -76,6 +78,44 @@ func TestRunnerRunsConfiguredMavenWithProjectJava(t *testing.T) {
 	}
 	if executor.spec.streams != streams {
 		t.Error("process streams were not forwarded")
+	}
+}
+
+func TestRunnerUsesBuildToolSettingsAlias(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	mavenPath := filepath.Join(root, "maven", mavenExecutableName())
+	writeRunnerExecutable(t, mavenPath)
+	resolver := &fakeMavenSettingsResolver{
+		entry: mavensettings.Entry{Alias: "intranet", Path: filepath.Join(root, "settings.xml")},
+	}
+	executor := &recordingProcessExecutor{}
+	runner := NewRunnerWithMavenSettings(&fakeConfigFinder{
+		found: true,
+		config: Config{
+			BuildTool: buildtool.Info{
+				Type:          buildtool.Maven,
+				Version:       "3.9.11",
+				Executable:    mavenPath,
+				SettingsAlias: "intranet",
+			},
+			Java: javainfo.Installation{
+				Version: "17",
+				Home:    filepath.Join(root, "jdk-17"),
+			},
+		},
+	}, resolver, executor)
+
+	if err := runner.Run(context.Background(), root, buildtool.Maven, []string{"clean", "package"}, Streams{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if resolver.alias != "intranet" {
+		t.Errorf("Resolve() alias = %q, want intranet", resolver.alias)
+	}
+	want := []string{"--settings", resolver.entry.Path, "clean", "package"}
+	if !reflect.DeepEqual(executor.spec.args, want) {
+		t.Errorf("process args = %#v, want %#v", executor.spec.args, want)
 	}
 }
 

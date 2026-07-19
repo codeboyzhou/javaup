@@ -50,6 +50,7 @@ javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 jup init
 jup run mvn [arguments...]
 jup settings add <alias> <path>
+jup settings use <alias>
 jup status
 jup uninit
 jup help [command]
@@ -91,8 +92,19 @@ jup settings add intranet /path/to/settings-intranet.xml
 jup settings add google /path/to/settings-google.xml
 ```
 
+`jup settings use` associates the current initialized Maven project with a
+saved alias. Subsequent `jup run mvn` commands resolve the alias and pass its
+current path to Maven with `--settings`, so updating an alias also updates every
+project that uses it:
+
+```shell
+jup settings use intranet
+jup run mvn clean package
+```
+
 `jup status` shows the initialized project root, detected build tool and
-executable, and the JDK used by `jup run`.
+executable, the JDK used by `jup run`, and the selected Maven settings alias
+when one is configured.
 
 `jup uninit` removes the saved configuration for the current project. Repeated
 execution is safe when the project has already been uninitialized.

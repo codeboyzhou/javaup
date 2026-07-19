@@ -50,6 +50,17 @@ func newStatusCommand(factory inspectorFactory, workingDirectory func() (string,
 				label.Sprint("Java home:"),
 				config.Java.Home,
 			)
+			if err != nil {
+				return err
+			}
+			if config.BuildTool.SettingsAlias != "" {
+				_, err = fmt.Fprintf(
+					writer,
+					"%s %s\n",
+					label.Sprint("Maven settings:"),
+					config.BuildTool.SettingsAlias,
+				)
+			}
 			return err
 		},
 	}

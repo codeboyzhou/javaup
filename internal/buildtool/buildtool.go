@@ -26,10 +26,11 @@ func (t Type) DisplayName() string {
 
 // Info contains the detected build tool configuration.
 type Info struct {
-	Type       Type   `json:"type"`
-	Version    string `json:"version"`
-	Executable string `json:"executable"`
-	Wrapper    bool   `json:"wrapper"`
+	Type          Type   `json:"type"`
+	Version       string `json:"version"`
+	Executable    string `json:"executable"`
+	Wrapper       bool   `json:"wrapper"`
+	SettingsAlias string `json:"settingsAlias,omitempty"`
 }
 
 // Summary returns a concise description of the build tool and its source.

@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestStoreAddsAndUpdatesMavenSettingsAliases(t *testing.T) {
+func TestStoreAddsAndUpdatesAliases(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -48,6 +48,23 @@ func TestStoreAddsAndUpdatesMavenSettingsAliases(t *testing.T) {
 	}
 	if len(got.Aliases) != 2 || got.Aliases["intranet"] != secondPath || got.Aliases["google"] != secondPath {
 		t.Errorf("aliases = %#v, want updated intranet and google mappings", got.Aliases)
+	}
+
+	entry, err = store.Resolve("intranet")
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if entry.Alias != "intranet" || entry.Path != secondPath {
+		t.Errorf("Resolve() entry = %#v, want intranet/%s", entry, secondPath)
+	}
+}
+
+func TestStoreRejectsUnknownAlias(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewStore(filepath.Join(t.TempDir(), "settings.json")).Resolve("missing")
+	if err == nil || !strings.Contains(err.Error(), "jup settings add") {
+		t.Fatalf("Resolve() error = %v, want add alias guidance", err)
 	}
 }
 

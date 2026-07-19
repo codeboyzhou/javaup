@@ -30,7 +30,11 @@ func newRootCommand(options Options) *cobra.Command {
 	root.AddCommand(newInitCommand(defaultInitializerFactory, defaultWorkingDirectory))
 	root.AddCommand(newUninitCommand(defaultUninitializerFactory, defaultWorkingDirectory))
 	root.AddCommand(newRunCommand(defaultRunnerFactory, defaultWorkingDirectory))
-	root.AddCommand(newSettingsCommand(defaultMavenSettingsFactory))
+	root.AddCommand(newSettingsCommand(
+		defaultMavenSettingsFactory,
+		defaultProjectMavenSettingsFactory,
+		defaultWorkingDirectory,
+	))
 	root.AddCommand(newStatusCommand(defaultInspectorFactory, defaultWorkingDirectory))
 	root.AddCommand(newVersionCommand(version))
 
