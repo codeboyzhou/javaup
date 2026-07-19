@@ -69,7 +69,7 @@ func (l *Locator) Locate(ctx context.Context, version string, preferred ...Insta
 		seen[key] = struct{}{}
 		discovered = append(discovered, installation)
 
-		if requested == "" || installation.Version == requested {
+		if matchesVersion(installation.Version, requested) {
 			return installation, nil
 		}
 	}
@@ -228,7 +228,7 @@ func inspectCandidate(ctx context.Context, candidate string) (Installation, bool
 		}
 		fields := strings.Fields(string(output))
 		if len(fields) >= 2 {
-			version, _ = normalizeVersion(fields[1])
+			version = validFullVersion(fields[1])
 		}
 	}
 	if version == "" {
@@ -250,11 +250,26 @@ func releaseVersion(path string) string {
 	for scanner.Scan() {
 		key, value, ok := strings.Cut(scanner.Text(), "=")
 		if ok && strings.TrimSpace(key) == "JAVA_VERSION" {
-			version, _ := normalizeVersion(strings.Trim(strings.TrimSpace(value), `"`))
-			return version
+			return validFullVersion(strings.Trim(strings.TrimSpace(value), `"`))
 		}
 	}
 	return ""
+}
+
+func validFullVersion(value string) string {
+	value = strings.TrimSpace(value)
+	if _, err := normalizeVersion(value); err != nil {
+		return ""
+	}
+	return value
+}
+
+func matchesVersion(version, requested string) bool {
+	if requested == "" {
+		return true
+	}
+	major, err := normalizeVersion(version)
+	return err == nil && major == requested
 }
 
 func normalizeVersion(value string) (string, error) {

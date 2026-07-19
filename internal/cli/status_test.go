@@ -33,7 +33,7 @@ func TestStatusCommandShowsCurrentProjectToolchain(t *testing.T) {
 			Executable: "/projects/demo/mvnw",
 			Wrapper:    true,
 		},
-		Java: javainfo.Installation{Version: "17", Home: "/jdks/17"},
+		Java: javainfo.Installation{Version: "17.0.12", Home: "/jdks/17"},
 	}}
 	command := newStatusCommand(func() (projectInspector, error) { return inspector, nil }, func() (string, error) {
 		return "/projects/demo/module", nil
@@ -51,7 +51,7 @@ func TestStatusCommandShowsCurrentProjectToolchain(t *testing.T) {
 		"Project: /projects/demo",
 		"Build tool: Maven 3.9.11 (wrapper)",
 		"Build executable: /projects/demo/mvnw",
-		"Using JDK: Java 17",
+		"Java version: 17.0.12",
 		"Java home: /jdks/17",
 	})
 }

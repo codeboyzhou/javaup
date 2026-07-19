@@ -27,7 +27,7 @@ func TestConfigStoreSavesProjectJSONStructure(t *testing.T) {
 			Executable: filepath.Join("maven", "bin", "mvn"),
 			Wrapper:    true,
 		},
-		Java:          javainfo.Installation{Version: "17", Home: filepath.Join("jdks", "17")},
+		Java:          javainfo.Installation{Version: "17.0.12", Home: filepath.Join("jdks", "17")},
 		InitializedAt: time.Date(2026, 7, 19, 1, 29, 8, 0, time.FixedZone("test", 8*60*60)),
 	}
 
@@ -55,7 +55,7 @@ func TestConfigStoreSavesProjectJSONStructure(t *testing.T) {
 			"wrapper":    true,
 		},
 		"java": map[string]any{
-			"version": "17",
+			"version": "17.0.12",
 			"home":    filepath.Join("jdks", "17"),
 		},
 		"initializedAt": "2026-07-19T01:29:08+08:00",

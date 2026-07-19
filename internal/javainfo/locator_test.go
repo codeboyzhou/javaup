@@ -32,6 +32,27 @@ func TestNormalizeVersion(t *testing.T) {
 	}
 }
 
+func TestMatchesVersionUsesInstalledMajorVersion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		version   string
+		requested string
+		want      bool
+	}{
+		{version: "17.0.12", requested: "17", want: true},
+		{version: "1.8.0_442", requested: "8", want: true},
+		{version: "21.0.7", requested: "17", want: false},
+		{version: "invalid", requested: "17", want: false},
+		{version: "21.0.7", requested: "", want: true},
+	}
+	for _, test := range tests {
+		if got := matchesVersion(test.version, test.requested); got != test.want {
+			t.Errorf("matchesVersion(%q, %q) = %t, want %t", test.version, test.requested, got, test.want)
+		}
+	}
+}
+
 func TestInspectCandidateUsesReleaseMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -50,8 +71,8 @@ func TestInspectCandidateUsesReleaseMetadata(t *testing.T) {
 	if !ok {
 		t.Fatal("inspectCandidate() ok = false, want true")
 	}
-	if installation.Version != "17" {
-		t.Errorf("Version = %q, want %q", installation.Version, "17")
+	if installation.Version != "17.0.12" {
+		t.Errorf("Version = %q, want %q", installation.Version, "17.0.12")
 	}
 	wantHome, _ := filepath.EvalSymlinks(home)
 	if installation.Home != filepath.Clean(wantHome) {
