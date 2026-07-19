@@ -49,6 +49,7 @@ javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 ```text
 jup init
 jup run mvn [arguments...]
+jup settings add <alias> <path>
 jup status
 jup uninit
 jup help [command]
@@ -78,6 +79,16 @@ below the initialized project root:
 
 ```shell
 jup run mvn clean package
+```
+
+`jup settings add` saves a name for an existing Maven `settings.xml` file. The
+path is normalized to an absolute path and stored under the platform-specific
+user configuration directory in `javaup/maven/settings.json`. Adding an
+existing alias updates its path:
+
+```shell
+jup settings add intranet /path/to/settings-intranet.xml
+jup settings add google /path/to/settings-google.xml
 ```
 
 `jup status` shows the initialized project root, detected build tool and
