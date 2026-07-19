@@ -52,6 +52,7 @@ jup run mvn [arguments...]
 jup settings add <alias> <path>
 jup settings list
 jup settings remove <alias>
+jup settings unset
 jup settings use <alias>
 jup status
 jup uninit
@@ -110,9 +111,13 @@ jup settings use intranet
 jup run mvn clean package
 ```
 
+`jup settings unset` removes the Maven settings alias selection from the
+current initialized project without deleting the saved alias. Running it when
+the project has no selected alias is safe.
+
 `jup status` shows the initialized project root, detected build tool and
-executable, the JDK used by `jup run`, and the selected Maven settings alias
-when one is configured.
+executable, the JDK used by `jup run`, and the Maven settings selection. Maven
+projects without a selected alias display `default`.
 
 `jup uninit` removes the saved configuration for the current project. Repeated
 execution is safe when the project has already been uninitialized.

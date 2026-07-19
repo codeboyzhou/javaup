@@ -20,8 +20,14 @@ type recordingMavenSettingsStore struct {
 }
 
 type recordingProjectMavenSettingsUser struct {
-	root  string
-	alias string
+	root          string
+	alias         string
+	previousAlias string
+}
+
+func (u *recordingProjectMavenSettingsUser) Unset(root string) (project.Config, string, error) {
+	u.root = root
+	return project.Config{ProjectRoot: "/projects/demo"}, u.previousAlias, nil
 }
 
 func (u *recordingProjectMavenSettingsUser) Use(
@@ -112,6 +118,52 @@ func TestSettingsUseCommandAssociatesCurrentProject(t *testing.T) {
 	}
 	const want = "Configured project /projects/demo to use Maven settings alias \"intranet\" " +
 		"at /maven/settings-intranet.xml.\n"
+	if got := normalizedOutput(output.String()); got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+func TestSettingsUnsetCommandUnbindsCurrentProject(t *testing.T) {
+	t.Parallel()
+
+	user := &recordingProjectMavenSettingsUser{previousAlias: "intranet"}
+	command := newSettingsCommand(
+		func() (mavenSettingsStore, error) { return &recordingMavenSettingsStore{}, nil },
+		func() (projectMavenSettingsUser, error) { return user, nil },
+		func() (string, error) { return "/projects/demo/module", nil },
+	)
+	command.SetArgs([]string{"unset"})
+	var output bytes.Buffer
+	command.SetOut(&output)
+
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("ExecuteContext() error = %v", err)
+	}
+	if user.root != "/projects/demo/module" {
+		t.Errorf("Unset() root = %q, want current project", user.root)
+	}
+	const want = "Unbound Maven settings alias \"intranet\" from project /projects/demo.\n"
+	if got := normalizedOutput(output.String()); got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+func TestSettingsUnsetCommandSucceedsWithoutBinding(t *testing.T) {
+	t.Parallel()
+
+	command := newSettingsCommand(
+		func() (mavenSettingsStore, error) { return &recordingMavenSettingsStore{}, nil },
+		func() (projectMavenSettingsUser, error) { return &recordingProjectMavenSettingsUser{}, nil },
+		func() (string, error) { return "/projects/demo", nil },
+	)
+	command.SetArgs([]string{"unset"})
+	var output bytes.Buffer
+	command.SetOut(&output)
+
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("ExecuteContext() error = %v", err)
+	}
+	const want = "Project /projects/demo has no Maven settings alias configured.\n"
 	if got := normalizedOutput(output.String()); got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}

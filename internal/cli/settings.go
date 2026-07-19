@@ -24,6 +24,7 @@ type mavenSettingsFactory func() (mavenSettingsStore, error)
 
 type projectMavenSettingsUser interface {
 	Use(root, alias string) (project.Config, mavensettings.Entry, error)
+	Unset(root string) (project.Config, string, error)
 }
 
 type projectMavenSettingsFactory func() (projectMavenSettingsUser, error)
@@ -44,8 +45,47 @@ func newSettingsCommand(
 	command.AddCommand(newSettingsAddCommand(settingsFactory))
 	command.AddCommand(newSettingsListCommand(settingsFactory))
 	command.AddCommand(newSettingsRemoveCommand(settingsFactory))
+	command.AddCommand(newSettingsUnsetCommand(projectFactory, workingDirectory))
 	command.AddCommand(newSettingsUseCommand(projectFactory, workingDirectory))
 	return command
+}
+
+func newSettingsUnsetCommand(
+	factory projectMavenSettingsFactory,
+	workingDirectory func() (string, error),
+) *cobra.Command {
+	return &cobra.Command{
+		Use:   "unset",
+		Short: "Stop using a Maven settings alias for the current project",
+		Args:  cobra.NoArgs,
+		RunE: func(command *cobra.Command, _ []string) error {
+			root, err := workingDirectory()
+			if err != nil {
+				return fmt.Errorf("resolve current directory: %w", err)
+			}
+			manager, err := factory()
+			if err != nil {
+				return err
+			}
+			config, previousAlias, err := manager.Unset(root)
+			if err != nil {
+				return err
+			}
+
+			writer := command.OutOrStdout()
+			success := newOutputStyle(writer, color.FgGreen)
+			message := fmt.Sprintf("Project %s has no Maven settings alias configured.", config.ProjectRoot)
+			if previousAlias != "" {
+				message = fmt.Sprintf(
+					"Unbound Maven settings alias %q from project %s.",
+					previousAlias,
+					config.ProjectRoot,
+				)
+			}
+			_, err = fmt.Fprintln(writer, success.Sprint(message))
+			return err
+		},
+	}
 }
 
 func newSettingsListCommand(factory mavenSettingsFactory) *cobra.Command {

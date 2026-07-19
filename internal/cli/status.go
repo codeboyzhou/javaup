@@ -6,6 +6,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
+	"github.com/codeboyzhou/javaup/internal/buildtool"
 	"github.com/codeboyzhou/javaup/internal/project"
 )
 
@@ -53,12 +54,16 @@ func newStatusCommand(factory inspectorFactory, workingDirectory func() (string,
 			if err != nil {
 				return err
 			}
-			if config.BuildTool.SettingsAlias != "" {
+			if config.BuildTool.Type == buildtool.Maven {
+				settingsAlias := config.BuildTool.SettingsAlias
+				if settingsAlias == "" {
+					settingsAlias = "default"
+				}
 				_, err = fmt.Fprintf(
 					writer,
 					"%s %s\n",
 					label.Sprint("Maven settings:"),
-					config.BuildTool.SettingsAlias,
+					settingsAlias,
 				)
 			}
 			return err

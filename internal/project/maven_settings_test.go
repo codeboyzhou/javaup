@@ -15,6 +15,7 @@ type fakeSettingsProjectStore struct {
 	found  bool
 	start  string
 	saved  Config
+	saves  int
 }
 
 func (s *fakeSettingsProjectStore) Find(start string) (Config, string, bool, error) {
@@ -24,7 +25,62 @@ func (s *fakeSettingsProjectStore) Find(start string) (Config, string, bool, err
 
 func (s *fakeSettingsProjectStore) Save(config Config) (string, error) {
 	s.saved = config
+	s.saves++
 	return "project.json", nil
+}
+
+func TestMavenSettingsManagerUnsetsAliasFromCurrentProject(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeSettingsProjectStore{
+		found: true,
+		config: Config{
+			ProjectRoot: "/projects/demo",
+			BuildTool: buildtool.Info{
+				Type:          buildtool.Maven,
+				SettingsAlias: "intranet",
+			},
+		},
+	}
+	manager := NewMavenSettingsManager(store, &fakeMavenSettingsResolver{})
+
+	config, previousAlias, err := manager.Unset("/projects/demo/module")
+	if err != nil {
+		t.Fatalf("Unset() error = %v", err)
+	}
+	if store.start != "/projects/demo/module" {
+		t.Errorf("Unset() lookup root = %q, want current project", store.start)
+	}
+	if previousAlias != "intranet" {
+		t.Errorf("Unset() previous alias = %q, want intranet", previousAlias)
+	}
+	if config.BuildTool.SettingsAlias != "" || store.saved.BuildTool.SettingsAlias != "" {
+		t.Errorf("saved Maven settings alias = %q, want empty", store.saved.BuildTool.SettingsAlias)
+	}
+}
+
+func TestMavenSettingsManagerUnsetIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeSettingsProjectStore{
+		found: true,
+		config: Config{
+			ProjectRoot: "/projects/demo",
+			BuildTool:   buildtool.Info{Type: buildtool.Maven},
+		},
+	}
+	manager := NewMavenSettingsManager(store, &fakeMavenSettingsResolver{})
+
+	config, previousAlias, err := manager.Unset("/projects/demo")
+	if err != nil {
+		t.Fatalf("Unset() error = %v", err)
+	}
+	if previousAlias != "" || config.BuildTool.SettingsAlias != "" {
+		t.Errorf("Unset() aliases = %q/%q, want empty", previousAlias, config.BuildTool.SettingsAlias)
+	}
+	if store.saves != 0 {
+		t.Errorf("Unset() Save() calls = %d, want 0", store.saves)
+	}
 }
 
 type fakeMavenSettingsResolver struct {
@@ -109,5 +165,45 @@ func TestMavenSettingsManagerPersistsAliasInProjectStore(t *testing.T) {
 	}
 	if !found || config.BuildTool.SettingsAlias != "intranet" {
 		t.Errorf("persisted project found/alias = %t/%q, want true/intranet", found, config.BuildTool.SettingsAlias)
+	}
+}
+
+func TestMavenSettingsManagerPersistsUnsetInProjectStore(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	projects := NewConfigStore(filepath.Join(t.TempDir(), "projects"))
+	if _, err := projects.Save(Config{
+		SchemaVersion: currentSchemaVersion,
+		ProjectRoot:   root,
+		BuildTool: buildtool.Info{
+			Type:          buildtool.Maven,
+			SettingsAlias: "intranet",
+		},
+	}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	manager := NewMavenSettingsManager(projects, &fakeMavenSettingsResolver{})
+	if _, previousAlias, err := manager.Unset(root); err != nil {
+		t.Fatalf("Unset() error = %v", err)
+	} else if previousAlias != "intranet" {
+		t.Errorf("Unset() previous alias = %q, want intranet", previousAlias)
+	}
+
+	config, path, found, err := projects.Load(root)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !found || config.BuildTool.SettingsAlias != "" {
+		t.Errorf("persisted project found/alias = %t/%q, want true/empty", found, config.BuildTool.SettingsAlias)
+	}
+	// #nosec G304 -- path is returned by the temporary project store created by this test.
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if strings.Contains(string(content), "settingsAlias") {
+		t.Errorf("persisted project still contains settingsAlias: %s", content)
 	}
 }

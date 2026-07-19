@@ -58,6 +58,31 @@ func TestStatusCommandShowsCurrentProjectToolchain(t *testing.T) {
 	})
 }
 
+func TestStatusCommandShowsDefaultMavenSettingsWithoutBinding(t *testing.T) {
+	t.Parallel()
+
+	inspector := &recordingProjectInspector{config: project.Config{
+		ProjectRoot: "/projects/demo",
+		BuildTool: buildtool.Info{
+			Type:       buildtool.Maven,
+			Version:    "3.9.11",
+			Executable: "/usr/bin/mvn",
+		},
+		Java: javainfo.Installation{Version: "17.0.12", Home: "/jdks/17"},
+	}}
+	command := newStatusCommand(
+		func() (projectInspector, error) { return inspector, nil },
+		func() (string, error) { return "/projects/demo", nil },
+	)
+	var output bytes.Buffer
+	command.SetOut(&output)
+
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("ExecuteContext() error = %v", err)
+	}
+	assertContains(t, output.String(), []string{"Maven settings: default"})
+}
+
 func TestStatusCommandReturnsInspectionError(t *testing.T) {
 	t.Parallel()
 
