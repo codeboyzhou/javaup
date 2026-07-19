@@ -19,11 +19,16 @@ type configStore interface {
 	Save(config Config) (string, error)
 }
 
+type initializerConfigStore interface {
+	configStore
+	Load(projectRoot string) (config Config, path string, found bool, err error)
+}
+
 // Initializer detects a project's build environment and persists it locally.
 type Initializer struct {
 	detectors []buildtool.Detector
 	java      javaLocator
-	store     configStore
+	store     initializerConfigStore
 	now       func() time.Time
 }
 
@@ -48,7 +53,7 @@ func NewDefaultInitializer() (*Initializer, error) {
 }
 
 // NewInitializer creates an initializer from replaceable detection services.
-func NewInitializer(detectors []buildtool.Detector, java javaLocator, store configStore) *Initializer {
+func NewInitializer(detectors []buildtool.Detector, java javaLocator, store initializerConfigStore) *Initializer {
 	return &Initializer{
 		detectors: detectors,
 		java:      java,
@@ -128,6 +133,7 @@ func (i *Initializer) Initialize(ctx context.Context, root string, progress Prog
 		Java:          java,
 		InitializedAt: i.now().Truncate(time.Second),
 	}
+	i.preserveMavenSettingsBinding(&config)
 	reportProgress(progress, ProgressEvent{
 		Step: 5, Total: initializationSteps, Name: configStepName, State: ProgressStarted,
 		Message: "Saving local project configuration",
@@ -139,6 +145,18 @@ func (i *Initializer) Initialize(ctx context.Context, root string, progress Prog
 	}
 	reportSuccess(progress, 5, configStepName, path)
 	return config, path, nil
+}
+
+func (i *Initializer) preserveMavenSettingsBinding(config *Config) {
+	if config.BuildTool.Type != buildtool.Maven {
+		return
+	}
+
+	existing, _, found, err := i.store.Load(config.ProjectRoot)
+	if err != nil || !found || existing.BuildTool.Type != buildtool.Maven {
+		return
+	}
+	config.BuildTool.SettingsAlias = existing.BuildTool.SettingsAlias
 }
 
 func buildToolProgressMessage(info buildtool.Info) string {

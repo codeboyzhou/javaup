@@ -37,6 +37,10 @@ func (s *fakeConfigStore) Save(config Config) (string, error) {
 	return s.path, nil
 }
 
+func (s *fakeConfigStore) Load(string) (Config, string, bool, error) {
+	return Config{}, s.path, false, nil
+}
+
 func TestInitializerCoordinatesDetectionAndStorage(t *testing.T) {
 	t.Parallel()
 
@@ -120,6 +124,42 @@ func TestInitializerCoordinatesDetectionAndStorage(t *testing.T) {
 	}
 	if events[3].Message != "Maven 3.9.11 (wrapper)" {
 		t.Errorf("build tool progress = %q, want %q", events[3].Message, "Maven 3.9.11 (wrapper)")
+	}
+}
+
+func TestInitializerReinitializationPreservesMavenSettingsBinding(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	detection := buildtool.Detection{
+		Tool: buildtool.Info{Type: buildtool.Maven, Version: "3.9.11"},
+	}
+	java := &fakeJavaLocator{result: javainfo.Installation{Version: "17", Home: "/jdk-17"}}
+	store := NewConfigStore(t.TempDir())
+	initializer := NewInitializer([]buildtool.Detector{fakeDetector{detection: detection}}, java, store)
+
+	config, _, err := initializer.Initialize(context.Background(), root, nil)
+	if err != nil {
+		t.Fatalf("first Initialize() error = %v", err)
+	}
+	config.BuildTool.SettingsAlias = "intranet"
+	if _, err := store.Save(config); err != nil {
+		t.Fatalf("Save() Maven settings binding error = %v", err)
+	}
+
+	config, _, err = initializer.Initialize(context.Background(), root, nil)
+	if err != nil {
+		t.Fatalf("second Initialize() error = %v", err)
+	}
+	if config.BuildTool.SettingsAlias != "intranet" {
+		t.Errorf("Maven settings alias = %q, want intranet", config.BuildTool.SettingsAlias)
+	}
+	persisted, _, found, err := store.Load(root)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !found || persisted.BuildTool.SettingsAlias != "intranet" {
+		t.Errorf("persisted project found/alias = %t/%q, want true/intranet", found, persisted.BuildTool.SettingsAlias)
 	}
 }
 
