@@ -18,6 +18,10 @@ type ConfigStore struct {
 	baseDir string
 }
 
+type configFinder interface {
+	Find(start string) (config Config, path string, found bool, err error)
+}
+
 // NewDefaultConfigStore uses the operating system's user configuration root.
 func NewDefaultConfigStore() (*ConfigStore, error) {
 	configDir, err := os.UserConfigDir()

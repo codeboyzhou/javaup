@@ -30,6 +30,7 @@ func newRootCommand(options Options) *cobra.Command {
 	root.AddCommand(newInitCommand(defaultInitializerFactory, defaultWorkingDirectory))
 	root.AddCommand(newUninitCommand(defaultUninitializerFactory, defaultWorkingDirectory))
 	root.AddCommand(newRunCommand(defaultRunnerFactory, defaultWorkingDirectory))
+	root.AddCommand(newStatusCommand(defaultInspectorFactory, defaultWorkingDirectory))
 	root.AddCommand(newVersionCommand(version))
 
 	return root

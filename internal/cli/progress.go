@@ -20,21 +20,21 @@ type progressRenderer struct {
 }
 
 func newProgressRenderer(writer io.Writer) *progressRenderer {
-	style := func(attributes ...color.Attribute) *color.Color {
-		value := color.New(attributes...)
-		if _, interactive := writer.(*os.File); !interactive {
-			value.DisableColor()
-		}
-		return value
-	}
-
 	return &progressRenderer{
 		writer:  writer,
-		stage:   style(color.FgBlue),
-		info:    style(color.FgCyan),
-		success: style(color.FgGreen),
-		failure: style(color.FgRed),
+		stage:   newOutputStyle(writer, color.FgBlue),
+		info:    newOutputStyle(writer, color.FgCyan),
+		success: newOutputStyle(writer, color.FgGreen),
+		failure: newOutputStyle(writer, color.FgRed),
 	}
+}
+
+func newOutputStyle(writer io.Writer, attributes ...color.Attribute) *color.Color {
+	style := color.New(attributes...)
+	if _, interactive := writer.(*os.File); !interactive {
+		style.DisableColor()
+	}
+	return style
 }
 
 func (r *progressRenderer) Report(event project.ProgressEvent) {

@@ -142,11 +142,7 @@ func (i *Initializer) Initialize(ctx context.Context, root string, progress Prog
 }
 
 func buildToolProgressMessage(info buildtool.Info) string {
-	source := "PATH"
-	if info.Wrapper {
-		source = "wrapper"
-	}
-	return fmt.Sprintf("%s %s (%s)", info.Type.DisplayName(), info.Version, source)
+	return info.Summary()
 }
 
 func reportSuccess(progress ProgressFunc, step int, name, message string) {

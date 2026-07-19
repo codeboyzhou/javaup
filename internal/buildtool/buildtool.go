@@ -1,7 +1,10 @@
 // Package buildtool defines abstractions shared by project build tool detectors.
 package buildtool
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // Type identifies a supported project build tool.
 type Type string
@@ -27,6 +30,15 @@ type Info struct {
 	Version    string `json:"version"`
 	Executable string `json:"executable"`
 	Wrapper    bool   `json:"wrapper"`
+}
+
+// Summary returns a concise description of the build tool and its source.
+func (i Info) Summary() string {
+	source := "PATH"
+	if i.Wrapper {
+		source = "wrapper"
+	}
+	return fmt.Sprintf("%s %s (%s)", i.Type.DisplayName(), i.Version, source)
 }
 
 // JavaRuntime describes the Java runtime used to launch a build tool.

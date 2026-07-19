@@ -49,6 +49,7 @@ javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 ```text
 jup init
 jup run mvn [arguments...]
+jup status
 jup uninit
 jup help [command]
 jup version
@@ -78,6 +79,9 @@ below the initialized project root:
 ```shell
 jup run mvn clean package
 ```
+
+`jup status` shows the initialized project root, detected build tool and
+executable, and the JDK used by `jup run`.
 
 `jup uninit` removes the saved configuration for the current project. Repeated
 execution is safe when the project has already been uninitialized.

@@ -21,10 +21,6 @@ type Streams struct {
 	Stderr io.Writer
 }
 
-type configFinder interface {
-	Find(start string) (config Config, path string, found bool, err error)
-}
-
 type processSpec struct {
 	executable  string
 	args        []string
