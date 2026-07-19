@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,37 +21,46 @@ type buildStep struct {
 }
 
 type palette struct {
-	title    *color.Color
-	label    *color.Color
-	value    *color.Color
-	stage    *color.Color
-	command  *color.Color
-	success  *color.Color
-	failure  *color.Color
-	duration *color.Color
+	info    *color.Color
+	error   *color.Color
+	heading *color.Color
+	stage   *color.Color
+	command *color.Color
+	success *color.Color
+	failure *color.Color
 }
+
+type buildResult struct {
+	artifact   string
+	failedStep string
+}
+
+const separator = "------------------------------------------------------------------------"
 
 func main() {
 	colors := newPalette()
-	if err := runBuild(colors); err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", colors.apply(colors.failure, "BUILD FAILED"), err)
+	started := time.Now()
+	result, err := runBuild(colors)
+	printSummary(colors, started, result, err)
+	if err != nil {
 		os.Exit(1)
 	}
 }
 
-func runBuild(colors palette) error {
+func runBuild(colors palette) (buildResult, error) {
 	if _, err := os.Stat("go.mod"); err != nil {
-		return fmt.Errorf("run this script from the repository root: %w", err)
+		return buildResult{}, fmt.Errorf("run this script from the repository root: %w", err)
 	}
 
 	goos, goarch, err := targetPlatform()
 	if err != nil {
-		return err
+		return buildResult{}, err
 	}
 
 	artifact := filepath.Join("dist", binaryName(goos))
+	result := buildResult{artifact: artifact}
 	if err := os.MkdirAll(filepath.Dir(artifact), 0o750); err != nil {
-		return fmt.Errorf("create output directory: %w", err)
+		return result, fmt.Errorf("create output directory: %w", err)
 	}
 
 	steps := []buildStep{
@@ -92,39 +102,30 @@ func runBuild(colors palette) error {
 		},
 	}
 
-	started := time.Now()
-	fmt.Printf(
-		"%s | %s %s | %s %s\n",
-		colors.apply(colors.title, "JUP BUILD"),
-		colors.apply(colors.label, "Target:"),
-		colors.apply(colors.value, goos+"/"+goarch),
-		colors.apply(colors.label, "Artifact:"),
-		colors.apply(colors.value, artifact),
-	)
+	printInfo(colors, colors.heading, separator)
+	printInfo(colors, colors.heading, "BUILDING JUP")
+	printInfo(colors, colors.heading, separator)
+	printInfo(colors, nil, "Target:   %s", goos+"/"+goarch)
+	printInfo(colors, nil, "Artifact: %s", artifact)
 
 	for index, step := range steps {
+		printInfo(colors, nil, "")
 		if err := runStep(colors, index+1, len(steps), step); err != nil {
-			return err
+			result.failedStep = step.name
+			return result, err
 		}
 	}
 
-	fmt.Printf(
-		"%s %s | %s %s\n",
-		colors.apply(colors.success, "BUILD SUCCEEDED"),
-		colors.apply(colors.duration, "in "+elapsed(started).String()),
-		colors.apply(colors.label, "Artifact:"),
-		colors.apply(colors.value, artifact),
-	)
-	return nil
+	return result, nil
 }
 
 func runStep(colors palette, index, total int, step buildStep) error {
-	stage := fmt.Sprintf("[%d/%d] %s", index, total, step.name)
-	fmt.Printf("%s - %s\n", colors.apply(colors.stage, stage), step.description)
+	stage := fmt.Sprintf("--- %s (%d/%d) ---", strings.ToLower(step.name), index, total)
+	printInfo(colors, colors.stage, "%s", stage)
+	printInfo(colors, nil, "%s", step.description)
 	commandLine := "$ " + strings.Join(append([]string{step.program}, step.args...), " ")
-	fmt.Printf("      %s\n", colors.apply(colors.command, commandLine))
+	printInfo(colors, colors.command, "%s", commandLine)
 
-	started := time.Now()
 	// #nosec G204 -- every command and argument is defined by the build script.
 	command := exec.Command(step.program, step.args...)
 	command.Stdin = os.Stdin
@@ -132,22 +133,61 @@ func runStep(colors palette, index, total int, step buildStep) error {
 	command.Stderr = os.Stderr
 
 	if err := command.Run(); err != nil {
-		result := fmt.Sprintf("[%d/%d] %s Failed", index, total, step.name)
-		fmt.Printf(
-			"%s %s\n",
-			colors.apply(colors.failure, result),
-			colors.apply(colors.duration, "in "+elapsed(started).String()),
-		)
 		return fmt.Errorf("%s step: %w", strings.ToLower(step.name), err)
 	}
-
-	result := fmt.Sprintf("[%d/%d] %s OK", index, total, step.name)
-	fmt.Printf(
-		"%s %s\n",
-		colors.apply(colors.success, result),
-		colors.apply(colors.duration, "in "+elapsed(started).String()),
-	)
 	return nil
+}
+
+func printSummary(colors palette, started time.Time, result buildResult, buildErr error) {
+	writer := io.Writer(os.Stdout)
+	prefix := colors.info
+	status := colors.success
+	outcome := "BUILD SUCCESS"
+	if buildErr != nil {
+		writer = os.Stderr
+		prefix = colors.error
+		status = colors.failure
+		outcome = "BUILD FAILURE"
+	}
+
+	printLog(writer, colors, prefix, status, separator)
+	printLog(writer, colors, prefix, status, "%s", outcome)
+	printLog(writer, colors, prefix, status, separator)
+	if result.failedStep != "" {
+		printLog(writer, colors, prefix, nil, "Failed at:   %s", result.failedStep)
+	}
+	if buildErr != nil {
+		printLog(writer, colors, prefix, nil, "Reason:      %v", buildErr)
+	}
+	printLog(writer, colors, prefix, nil, "Total time:  %s", formatDuration(time.Since(started)))
+	printLog(writer, colors, prefix, nil, "Finished at: %s", time.Now().Format("2006-01-02T15:04:05Z07:00"))
+	if buildErr == nil && result.artifact != "" {
+		printLog(writer, colors, prefix, nil, "Artifact:    %s", result.artifact)
+	}
+	printLog(writer, colors, prefix, status, separator)
+}
+
+func printInfo(colors palette, style *color.Color, format string, args ...any) {
+	printLog(os.Stdout, colors, colors.info, style, format, args...)
+}
+
+func printLog(
+	writer io.Writer,
+	colors palette,
+	prefixStyle *color.Color,
+	messageStyle *color.Color,
+	format string,
+	args ...any,
+) {
+	prefix := colors.apply(prefixStyle, "[INFO]")
+	if prefixStyle == colors.error {
+		prefix = colors.apply(prefixStyle, "[ERROR]")
+	}
+	message := fmt.Sprintf(format, args...)
+	if messageStyle != nil {
+		message = colors.apply(messageStyle, message)
+	}
+	_, _ = fmt.Fprintf(writer, "%s %s\n", prefix, message)
 }
 
 func newPalette() palette {
@@ -163,14 +203,13 @@ func newPalette() palette {
 	}
 
 	return palette{
-		title:    style(color.FgCyan),
-		label:    style(color.FgCyan),
-		value:    style(),
-		stage:    style(color.FgBlue),
-		command:  style(color.Faint, color.FgWhite),
-		success:  style(color.FgGreen),
-		failure:  style(color.FgRed),
-		duration: style(color.FgYellow),
+		info:    style(color.Bold, color.FgBlue),
+		error:   style(color.FgRed),
+		heading: style(color.Bold, color.FgGreen),
+		stage:   style(color.FgGreen),
+		command: style(color.Faint, color.FgWhite),
+		success: style(color.Bold, color.FgGreen),
+		failure: style(color.Bold, color.FgRed),
 	}
 }
 
@@ -214,6 +253,6 @@ func binaryName(goos string) string {
 	return "jup"
 }
 
-func elapsed(started time.Time) time.Duration {
-	return time.Since(started).Round(time.Millisecond)
+func formatDuration(duration time.Duration) string {
+	return fmt.Sprintf("%.3f s", duration.Round(time.Millisecond).Seconds())
 }
