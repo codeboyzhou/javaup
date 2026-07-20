@@ -6,14 +6,14 @@
   irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
 
 .EXAMPLE
-  $env:JUP_VERSION = 'v0.1.0'
+  $env:JAVAUP_VERSION = 'v0.1.0'
   irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
 
 .NOTES
   Optional environment variables:
-    JUP_VERSION         Release version to install, such as v0.1.0 or 0.1.0
-    JUP_INSTALL_DIR     Installation directory; defaults to %USERPROFILE%\.javaup
-    JUP_NO_MODIFY_PATH  Skip the user PATH update when set to a non-empty value
+    JAVAUP_VERSION         Release version to install, such as v0.1.0 or 0.1.0
+    JAVAUP_HOME            Application directory; defaults to %USERPROFILE%\.javaup
+    JAVAUP_NO_MODIFY_PATH  Skip the user PATH update when set to a non-empty value
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -26,13 +26,13 @@ $ProgressPreference = 'SilentlyContinue'
 $Repository = 'codeboyzhou/javaup'
 $ReleaseBase = "https://github.com/$Repository/releases"
 $ApiBase = "https://api.github.com/repos/$Repository"
-$JupVersion = $env:JUP_VERSION
-$JupInstallDir = if ($env:JUP_INSTALL_DIR) {
-  $env:JUP_INSTALL_DIR
+$JavaupVersion = $env:JAVAUP_VERSION
+$JavaupHome = if ($env:JAVAUP_HOME) {
+  $env:JAVAUP_HOME
 } else {
   Join-Path $env:USERPROFILE '.javaup'
 }
-$JupNoModifyPath = $env:JUP_NO_MODIFY_PATH
+$JavaupNoModifyPath = $env:JAVAUP_NO_MODIFY_PATH
 $RequestHeaders = @{
   Accept = 'application/vnd.github+json'
   'User-Agent' = 'javaup-installer'
@@ -67,13 +67,13 @@ function Get-Architecture {
 }
 
 function Resolve-Version {
-  if ($JupVersion) {
-    $tag = $JupVersion.Trim()
+  if ($JavaupVersion) {
+    $tag = $JavaupVersion.Trim()
     if (-not $tag.StartsWith('v')) {
       $tag = "v$tag"
     }
     if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
-      Stop-Install "invalid release version: $JupVersion"
+      Stop-Install "invalid release version: $JavaupVersion"
     }
     Write-Step "Using requested version $tag"
     return $tag
@@ -107,8 +107,8 @@ function Test-Checksum([string]$File, [string]$Expected) {
 }
 
 function Add-ToUserPath([string]$Directory) {
-  if ($JupNoModifyPath) {
-    Write-Step 'Skipping PATH update because JUP_NO_MODIFY_PATH is set'
+  if ($JavaupNoModifyPath) {
+    Write-Step 'Skipping PATH update because JAVAUP_NO_MODIFY_PATH is set'
     return
   }
 
@@ -133,6 +133,15 @@ function Add-ToUserPath([string]$Directory) {
   [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
   $env:Path = "$normalizedDirectory;$env:Path"
   Write-Step "Added $normalizedDirectory to the user PATH"
+}
+
+function Save-JavaupHome {
+  if (-not $env:JAVAUP_HOME) {
+    return
+  }
+  [Environment]::SetEnvironmentVariable('JAVAUP_HOME', $JavaupHome, 'User')
+  $env:JAVAUP_HOME = $JavaupHome
+  Write-Step "Saved JAVAUP_HOME as $JavaupHome"
 }
 
 function Install-Binary([string]$Source, [string]$Destination) {
@@ -165,6 +174,10 @@ try {
   if ($env:OS -ne 'Windows_NT') {
     Stop-Install 'this installer supports Windows only'
   }
+  if (-not [System.IO.Path]::IsPathRooted($JavaupHome)) {
+    Stop-Install 'JAVAUP_HOME must be an absolute path'
+  }
+  $JavaupHome = [System.IO.Path]::GetFullPath($JavaupHome)
 
   $architecture = Get-Architecture
   $tag = Resolve-Version
@@ -193,9 +206,10 @@ try {
       Stop-Install "release archive contains $($binaries.Count) jup.exe files, expected 1"
     }
 
-    $binDirectory = Join-Path $JupInstallDir 'bin'
+    $binDirectory = Join-Path $JavaupHome 'bin'
     $destination = Join-Path $binDirectory 'jup.exe'
     Install-Binary $binaries[0].FullName $destination
+    Save-JavaupHome
     Add-ToUserPath $binDirectory
 
     Write-Step "Installed jup $tag to $destination"

@@ -33,14 +33,14 @@ do not carry over to the terminal.
 `jup` turns those error-prone manual steps into one initialization command and
 one stable build entry point.
 
-| Scenario | Without `jup` | With `jup` |
-| --- | --- | --- |
-| Switching projects | Edit `JAVA_HOME` and `PATH` manually | Use the JDK saved for the project |
-| Selecting Maven | Depend on the current PATH and risk using the wrong version | Prefer the project Wrapper, otherwise save Maven from PATH |
-| IDE versus terminal | Maintain two configurations that may drift apart | Use an explicit, inspectable terminal toolchain |
-| Private repositories | Repeat `--settings` or replace the global file | Bind a named `settings.xml` to each project |
-| Working in modules | Return to the root or resolve the environment manually | Find the initialized project from any descendant directory |
-| Environment impact | Mutate the shell and affect later commands | Change only the spawned build process |
+| Scenario             | Without `jup`                                               | With `jup`                                                 |
+|----------------------|-------------------------------------------------------------|------------------------------------------------------------|
+| Switching projects   | Edit `JAVA_HOME` and `PATH` manually                        | Use the JDK saved for the project                          |
+| Selecting Maven      | Depend on the current PATH and risk using the wrong version | Prefer the project Wrapper, otherwise save Maven from PATH |
+| IDE versus terminal  | Maintain two configurations that may drift apart            | Use an explicit, inspectable terminal toolchain            |
+| Private repositories | Repeat `--settings` or replace the global file              | Bind a named `settings.xml` to each project                |
+| Working in modules   | Return to the root or resolve the environment manually      | Find the initialized project from any descendant directory |
+| Environment impact   | Mutate the shell and affect later commands                  | Change only the spawned build process                      |
 
 `jup` does not download or install JDKs or Maven, and it does not modify
 `JAVA_HOME` in the current shell. It discovers existing local toolchains,
@@ -77,8 +77,8 @@ curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/instal
 
 The installer detects the operating system and architecture, verifies the
 downloaded release's SHA-256 checksum, installs `jup` under `~/.javaup/bin`,
-and updates the appropriate shell profile. Set `JUP_VERSION`,
-`JUP_INSTALL_DIR`, or `JUP_NO_MODIFY_PATH` to customize the installation.
+and updates the appropriate shell profile. Set `JAVAUP_VERSION`, `JAVAUP_HOME`,
+or `JAVAUP_NO_MODIFY_PATH` to customize the installation.
 
 ### Install on Windows
 
@@ -90,8 +90,8 @@ irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 |
 
 The installer downloads the latest Windows release, verifies its SHA-256
 checksum, installs `jup.exe` under `%USERPROFILE%\.javaup\bin`, and adds that
-directory to the user PATH. Set `JUP_VERSION`, `JUP_INSTALL_DIR`, or
-`JUP_NO_MODIFY_PATH` before running the command to customize the installation.
+directory to the user PATH. Set `JAVAUP_VERSION`, `JAVAUP_HOME`, or
+`JAVAUP_NO_MODIFY_PATH` before running the command to customize the installation.
 
 ### Install with Go
 
@@ -340,23 +340,31 @@ javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 
 ## Configuration storage
 
-Project configurations and Maven settings aliases live in the user
-configuration directory and are not written into project repositories:
+Project configurations and Maven settings aliases live under `JAVAUP_HOME` and
+are not written into project repositories. Release installers also place the
+executable in its `bin` directory. The default is `.javaup` in the current
+user's home directory:
 
-| Platform | Configuration root |
-| --- | --- |
-| Windows | `%AppData%\javaup` |
-| macOS | `~/Library/Application Support/javaup` |
-| Linux | `$XDG_CONFIG_HOME/javaup`, or `~/.config/javaup` when unset |
+| Platform | Default `JAVAUP_HOME`   |
+|----------|-------------------------|
+| Windows  | `%USERPROFILE%\.javaup` |
+| macOS    | `$HOME/.javaup`         |
+| Linux    | `$HOME/.javaup`         |
 
 Directory layout:
 
 ```text
-javaup/
-├── projects/              # one JSON document per initialized project
-└── maven/
-    └── settings.json      # Maven settings alias registry
+.javaup/
+├── bin/
+│   └── jup                # jup.exe on Windows
+└── config/
+    ├── projects/          # one JSON document per initialized project
+    └── maven/
+        └── settings.json  # Maven settings alias registry
 ```
+
+Set `JAVAUP_HOME` to an absolute path before installing or running `jup` to
+use another location.
 
 Project configurations contain absolute path snapshots. Run `jup init` again
 after moving or deleting a JDK, Maven Wrapper, or Maven installation.

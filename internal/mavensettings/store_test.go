@@ -76,6 +76,20 @@ func TestStoreAddsAndUpdatesAliases(t *testing.T) {
 	}
 }
 
+func TestNewDefaultStoreUsesJavaupHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("JAVAUP_HOME", home)
+
+	store, err := NewDefaultStore()
+	if err != nil {
+		t.Fatalf("NewDefaultStore() error = %v", err)
+	}
+	want := filepath.Join(home, "config", "maven", "settings.json")
+	if store.path != want {
+		t.Errorf("NewDefaultStore() path = %q, want %q", store.path, want)
+	}
+}
+
 func TestStoreRejectsUnknownAlias(t *testing.T) {
 	t.Parallel()
 

@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/codeboyzhou/javaup/internal/apphome"
 )
 
 const currentSchemaVersion = 1
@@ -31,13 +33,13 @@ type Store struct {
 	path string
 }
 
-// NewDefaultStore uses the operating system's user configuration root.
+// NewDefaultStore uses the configured javaup application directory.
 func NewDefaultStore() (*Store, error) {
-	configDir, err := os.UserConfigDir()
+	home, err := apphome.Resolve()
 	if err != nil {
-		return nil, fmt.Errorf("resolve user configuration directory: %w", err)
+		return nil, err
 	}
-	return NewStore(filepath.Join(configDir, "javaup", "maven", "settings.json")), nil
+	return NewStore(filepath.Join(home, "config", "maven", "settings.json")), nil
 }
 
 // NewStore creates a Maven settings store at path.

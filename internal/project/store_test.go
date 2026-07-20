@@ -67,6 +67,20 @@ func TestConfigStoreSavesProjectJSONStructure(t *testing.T) {
 	}
 }
 
+func TestNewDefaultConfigStoreUsesJavaupHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("JAVAUP_HOME", home)
+
+	store, err := NewDefaultConfigStore()
+	if err != nil {
+		t.Fatalf("NewDefaultConfigStore() error = %v", err)
+	}
+	want := filepath.Join(home, "config", "projects")
+	if store.baseDir != want {
+		t.Errorf("NewDefaultConfigStore() baseDir = %q, want %q", store.baseDir, want)
+	}
+}
+
 func TestConfigStoreDeletesProjectConfigurationIdempotently(t *testing.T) {
 	t.Parallel()
 

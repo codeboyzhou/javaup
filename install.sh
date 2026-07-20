@@ -6,16 +6,16 @@
 #   curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/install.sh | sh
 #
 # Optional environment variables:
-#   JUP_VERSION         Release version to install, such as v0.1.0 or 0.1.0
-#   JUP_INSTALL_DIR     Installation directory; defaults to $HOME/.javaup
-#   JUP_NO_MODIFY_PATH  Skip the shell profile update when set to a non-empty value
+#   JAVAUP_VERSION         Release version to install, such as v0.1.0 or 0.1.0
+#   JAVAUP_HOME            Application directory; defaults to $HOME/.javaup
+#   JAVAUP_NO_MODIFY_PATH  Skip the shell profile update when set to a non-empty value
 
 set -eu
 
 repository="codeboyzhou/javaup"
 release_base="https://github.com/$repository/releases"
-install_dir=${JUP_INSTALL_DIR:-"$HOME/.javaup"}
-no_modify_path=${JUP_NO_MODIFY_PATH:-}
+javaup_home=${JAVAUP_HOME:-"$HOME/.javaup"}
+no_modify_path=${JAVAUP_NO_MODIFY_PATH:-}
 temporary=
 
 write_step() {
@@ -48,7 +48,7 @@ detect_architecture() {
 }
 
 resolve_version() {
-  requested=${JUP_VERSION:-}
+  requested=${JAVAUP_VERSION:-}
   if [ -n "$requested" ]; then
     case "$requested" in
       v*) tag=$requested ;;
@@ -92,16 +92,9 @@ add_to_path() {
   platform=$2
 
   if [ -n "$no_modify_path" ]; then
-    write_step 'Skipping PATH update because JUP_NO_MODIFY_PATH is set'
+    write_step 'Skipping PATH update because JAVAUP_NO_MODIFY_PATH is set'
     return
   fi
-
-  case ":${PATH:-}:" in
-    *":$bin_directory:"*)
-      write_step "$bin_directory is already in PATH"
-      return
-      ;;
-  esac
 
   shell_path=${SHELL:-}
   shell_name=${shell_path##*/}
@@ -121,17 +114,42 @@ add_to_path() {
   quoted_directory=$(shell_quote "$bin_directory")
   if [ "$shell_name" = 'fish' ]; then
     path_line="fish_add_path $quoted_directory"
+    home_line="set -gx JAVAUP_HOME $(shell_quote "$javaup_home")"
   else
     path_line="export PATH=$quoted_directory:\$PATH"
+    home_line="export JAVAUP_HOME=$(shell_quote "$javaup_home")"
   fi
-  if [ -f "$profile" ] && grep -Fqx "$path_line" "$profile"; then
-    write_step "$bin_directory is already configured in $profile"
+
+  needs_home=
+  if [ -n "${JAVAUP_HOME:-}" ] && { [ ! -f "$profile" ] || ! grep -Fqx "$home_line" "$profile"; }; then
+    needs_home=1
+  fi
+  needs_path=
+  case ":${PATH:-}:" in
+    *":$bin_directory:"*) ;;
+    *)
+      if [ ! -f "$profile" ] || ! grep -Fqx "$path_line" "$profile"; then
+        needs_path=1
+      fi
+      ;;
+  esac
+
+  if [ -z "$needs_home" ] && [ -z "$needs_path" ]; then
+    write_step "$bin_directory and JAVAUP_HOME are already configured"
     return
   fi
 
   mkdir -p "${profile%/*}"
-  printf '\n# Added by the javaup installer\n%s\n' "$path_line" >>"$profile"
-  write_step "Added $bin_directory to PATH in $profile"
+  {
+    printf '\n# Added by the javaup installer\n'
+    if [ -n "$needs_home" ]; then
+      printf '%s\n' "$home_line"
+    fi
+    if [ -n "$needs_path" ]; then
+      printf '%s\n' "$path_line"
+    fi
+  } >>"$profile"
+  write_step "Updated javaup environment settings in $profile"
 }
 
 cleanup() {
@@ -148,6 +166,11 @@ require_command tar
 require_command find
 require_command mktemp
 require_command uname
+
+case "$javaup_home" in
+  /*) ;;
+  *) die 'JAVAUP_HOME must be an absolute path' ;;
+esac
 
 platform=$(detect_platform)
 architecture=$(detect_architecture)
@@ -183,7 +206,7 @@ extra_binary=$(printf '%s\n' "$binaries" | sed -n '2p')
 [ -n "$binary" ] || die 'release archive does not contain jup'
 [ -z "$extra_binary" ] || die 'release archive contains more than one jup binary'
 
-bin_directory="$install_dir/bin"
+bin_directory="$javaup_home/bin"
 mkdir -p "$bin_directory"
 bin_directory=$(cd "$bin_directory" && pwd -P)
 staged="$bin_directory/.jup-$$.tmp"

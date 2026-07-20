@@ -29,14 +29,14 @@
 
 `jup` 将这些容易出错的手工操作变成一次初始化和一个稳定的执行入口。
 
-| 场景 | 不使用 `jup` | 使用 `jup` |
-| --- | --- | --- |
-| 切换项目 | 手动修改 `JAVA_HOME`、`PATH` | 项目配置自动选择已保存的 JDK |
-| Maven 选择 | 依赖当前 PATH，容易误用版本 | 优先使用项目 Wrapper，否则保存 PATH 中的 Maven |
-| 终端与 IDE | 两套配置可能不一致 | 终端构建使用明确、可检查的工具链 |
-| 私服配置 | 反复传递 `--settings` 或替换全局文件 | 用别名绑定项目与 `settings.xml` |
-| 子模块目录 | 需要先回到项目根目录或自行判断环境 | 从当前目录向上查找已初始化项目 |
-| 环境影响 | 修改当前 shell，可能影响后续命令 | 只修改构建子进程的环境 |
+| 场景       | 不使用 `jup`                 | 使用 `jup`                          |
+|----------|---------------------------|-----------------------------------|
+| 切换项目     | 手动修改 `JAVA_HOME`、`PATH`   | 项目配置自动选择已保存的 JDK                  |
+| Maven 选择 | 依赖当前 PATH，容易误用版本          | 优先使用项目 Wrapper，否则保存 PATH 中的 Maven |
+| 终端与 IDE  | 两套配置可能不一致                 | 终端构建使用明确、可检查的工具链                  |
+| 私服配置     | 反复传递 `--settings` 或替换全局文件 | 用别名绑定项目与 `settings.xml`           |
+| 子模块目录    | 需要先回到项目根目录或自行判断环境         | 从当前目录向上查找已初始化项目                   |
+| 环境影响     | 修改当前 shell，可能影响后续命令       | 只修改构建子进程的环境                       |
 
 需要注意：`jup` 不负责下载或安装 JDK/Maven，也不会修改当前 shell 的
 `JAVA_HOME`。它负责发现本机已有工具链、保存项目选择，并在执行构建时隔离环境。
@@ -64,8 +64,8 @@ curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/instal
 ```
 
 安装脚本会识别操作系统和处理器架构、校验发行包的 SHA-256，将 `jup` 安装到
-`~/.javaup/bin`，并更新对应的 shell 配置文件。可通过 `JUP_VERSION`、
-`JUP_INSTALL_DIR` 或 `JUP_NO_MODIFY_PATH` 自定义安装行为。
+`~/.javaup/bin`，并更新对应的 shell 配置文件。可通过 `JAVAUP_VERSION`、
+`JAVAUP_HOME` 或 `JAVAUP_NO_MODIFY_PATH` 自定义安装行为。
 
 ### 在 Windows 上安装
 
@@ -77,7 +77,7 @@ irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 |
 
 安装脚本会下载最新的 Windows 发行版、校验 SHA-256，将 `jup.exe` 安装到
 `%USERPROFILE%\.javaup\bin`，并把该目录加入用户 PATH。执行安装命令前可通过
-`JUP_VERSION`、`JUP_INSTALL_DIR` 或 `JUP_NO_MODIFY_PATH` 自定义安装行为。
+`JAVAUP_VERSION`、`JAVAUP_HOME` 或 `JAVAUP_NO_MODIFY_PATH` 自定义安装行为。
 
 ### 使用 Go 安装
 
@@ -309,22 +309,29 @@ javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 
 ## 配置存储
 
-项目配置和 Maven settings 别名保存在用户配置目录，不写入项目仓库：
+项目配置和 Maven settings 别名统一保存在 `JAVAUP_HOME` 下，不写入项目仓库；
+Release 安装器也会将可执行程序放入其中的 `bin` 目录。默认使用当前用户主目录下的
+`.javaup`：
 
-| 平台 | 配置根目录 |
-| --- | --- |
-| Windows | `%AppData%\javaup` |
-| macOS | `~/Library/Application Support/javaup` |
-| Linux | `$XDG_CONFIG_HOME/javaup`，未设置时为 `~/.config/javaup` |
+| 平台      | 默认 `JAVAUP_HOME`        |
+|---------|-------------------------|
+| Windows | `%USERPROFILE%\.javaup` |
+| macOS   | `$HOME/.javaup`         |
+| Linux   | `$HOME/.javaup`         |
 
 目录内容：
 
 ```text
-javaup/
-├── projects/              # 每个已初始化项目一个 JSON 文件
-└── maven/
-    └── settings.json      # Maven settings 别名注册表
+.javaup/
+├── bin/
+│   └── jup                # Windows 上为 jup.exe
+└── config/
+    ├── projects/          # 每个已初始化项目一个 JSON 文件
+    └── maven/
+        └── settings.json  # Maven settings 别名注册表
 ```
+
+安装或运行 `jup` 前，可将 `JAVAUP_HOME` 设置为其他绝对路径来更改存储位置。
 
 项目配置记录的是绝对路径快照。如果移动或删除 JDK、Maven Wrapper、Maven 安装目录，
 请重新运行 `jup init`。

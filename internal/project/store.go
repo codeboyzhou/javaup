@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"unicode"
+
+	"github.com/codeboyzhou/javaup/internal/apphome"
 )
 
 // ConfigStore persists one JSON document per project.
@@ -22,13 +24,13 @@ type configFinder interface {
 	Find(start string) (config Config, path string, found bool, err error)
 }
 
-// NewDefaultConfigStore uses the operating system's user configuration root.
+// NewDefaultConfigStore uses the configured javaup application directory.
 func NewDefaultConfigStore() (*ConfigStore, error) {
-	configDir, err := os.UserConfigDir()
+	home, err := apphome.Resolve()
 	if err != nil {
-		return nil, fmt.Errorf("resolve user configuration directory: %w", err)
+		return nil, err
 	}
-	return NewConfigStore(filepath.Join(configDir, "javaup", "projects")), nil
+	return NewConfigStore(filepath.Join(home, "config", "projects")), nil
 }
 
 // NewConfigStore creates a store rooted at baseDir.
