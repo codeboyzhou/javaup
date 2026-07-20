@@ -42,7 +42,11 @@ func (s *ConfigStore) Save(config Config) (string, error) {
 		return "", fmt.Errorf("create project configuration directory: %w", err)
 	}
 
-	path := filepath.Join(s.baseDir, configFileName(config.ProjectRoot))
+	canonicalRoot, err := canonicalProjectRoot(config.ProjectRoot)
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(s.baseDir, configFileName(canonicalRoot))
 	temporary, err := os.CreateTemp(s.baseDir, ".project-*.tmp")
 	if err != nil {
 		return "", fmt.Errorf("create temporary project configuration: %w", err)
@@ -73,7 +77,11 @@ func (s *ConfigStore) Save(config Config) (string, error) {
 
 // Load reads the configuration associated with projectRoot.
 func (s *ConfigStore) Load(projectRoot string) (config Config, path string, found bool, err error) {
-	path = filepath.Join(s.baseDir, configFileName(projectRoot))
+	canonicalRoot, err := canonicalProjectRoot(projectRoot)
+	if err != nil {
+		return Config{}, "", false, err
+	}
+	path = filepath.Join(s.baseDir, configFileName(canonicalRoot))
 	// #nosec G304 -- path is derived from the configured store directory and a hashed project identity.
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -92,10 +100,6 @@ func (s *ConfigStore) Load(projectRoot string) (config Config, path string, foun
 		)
 	}
 
-	canonicalRoot, err := canonicalProjectRoot(projectRoot)
-	if err != nil {
-		return Config{}, path, true, err
-	}
 	configuredRoot, err := canonicalProjectRoot(config.ProjectRoot)
 	if err != nil {
 		return Config{}, path, true, fmt.Errorf("resolve configured project root: %w", err)
@@ -128,7 +132,11 @@ func (s *ConfigStore) Find(start string) (config Config, path string, found bool
 
 // Delete removes the configuration associated with projectRoot.
 func (s *ConfigStore) Delete(projectRoot string) (path string, removed bool, err error) {
-	path = filepath.Join(s.baseDir, configFileName(projectRoot))
+	canonicalRoot, err := canonicalProjectRoot(projectRoot)
+	if err != nil {
+		return "", false, err
+	}
+	path = filepath.Join(s.baseDir, configFileName(canonicalRoot))
 	if err := os.Remove(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return path, false, nil
@@ -164,7 +172,15 @@ func sanitizeName(value string) string {
 
 func samePath(left, right string) bool {
 	if runtime.GOOS == "windows" {
-		return strings.EqualFold(left, right)
+		if strings.EqualFold(left, right) {
+			return true
+		}
+		resolvedLeft, leftErr := filepath.EvalSymlinks(left)
+		resolvedRight, rightErr := filepath.EvalSymlinks(right)
+		if leftErr == nil && rightErr == nil {
+			return strings.EqualFold(filepath.Clean(resolvedLeft), filepath.Clean(resolvedRight))
+		}
+		return false
 	}
 	return left == right
 }

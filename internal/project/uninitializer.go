@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"fmt"
 )
 
 const uninitializationSteps = 2
@@ -53,7 +54,12 @@ func (u *Uninitializer) Uninitialize(
 	}
 	projectRoot := canonicalRoot
 	if found {
-		projectRoot = config.ProjectRoot
+		projectRoot, err = canonicalProjectRoot(config.ProjectRoot)
+		if err != nil {
+			err = fmt.Errorf("resolve configured project root: %w", err)
+			reportUninitFailure(progress, 1, projectStepName, err)
+			return path, false, err
+		}
 	}
 	reportUninitProgress(progress, 1, projectStepName, ProgressSucceeded, projectRoot)
 

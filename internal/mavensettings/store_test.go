@@ -15,14 +15,16 @@ func TestStoreAddsAndUpdatesAliases(t *testing.T) {
 	registryPath := filepath.Join(root, "config", "settings.json")
 	firstPath := writeSettingsFile(t, filepath.Join(root, "settings-intranet.xml"))
 	secondPath := writeSettingsFile(t, filepath.Join(root, "settings-google.xml"))
+	wantFirstPath := canonicalSettingsPath(t, firstPath)
+	wantSecondPath := canonicalSettingsPath(t, secondPath)
 	store := NewStore(registryPath)
 
 	entry, savedPath, err := store.Add("intranet", firstPath)
 	if err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
-	if entry.Alias != "intranet" || entry.Path != firstPath {
-		t.Errorf("Add() entry = %#v, want intranet/%s", entry, firstPath)
+	if entry.Alias != "intranet" || entry.Path != wantFirstPath {
+		t.Errorf("Add() entry = %#v, want intranet/%s", entry, wantFirstPath)
 	}
 	if savedPath != registryPath {
 		t.Errorf("Add() registry path = %q, want %q", savedPath, registryPath)
@@ -46,7 +48,7 @@ func TestStoreAddsAndUpdatesAliases(t *testing.T) {
 	if got.SchemaVersion != currentSchemaVersion {
 		t.Errorf("schema version = %d, want %d", got.SchemaVersion, currentSchemaVersion)
 	}
-	if len(got.Aliases) != 2 || got.Aliases["intranet"] != secondPath || got.Aliases["google"] != secondPath {
+	if len(got.Aliases) != 2 || got.Aliases["intranet"] != wantSecondPath || got.Aliases["google"] != wantSecondPath {
 		t.Errorf("aliases = %#v, want updated intranet and google mappings", got.Aliases)
 	}
 
@@ -54,8 +56,8 @@ func TestStoreAddsAndUpdatesAliases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	if entry.Alias != "intranet" || entry.Path != secondPath {
-		t.Errorf("Resolve() entry = %#v, want intranet/%s", entry, secondPath)
+	if entry.Alias != "intranet" || entry.Path != wantSecondPath {
+		t.Errorf("Resolve() entry = %#v, want intranet/%s", entry, wantSecondPath)
 	}
 
 	entries, err := store.List()
@@ -89,6 +91,8 @@ func TestStoreRemovesAlias(t *testing.T) {
 	root := t.TempDir()
 	settingsPath := writeSettingsFile(t, filepath.Join(root, "settings.xml"))
 	googlePath := writeSettingsFile(t, filepath.Join(root, "settings-google.xml"))
+	wantSettingsPath := canonicalSettingsPath(t, settingsPath)
+	wantGooglePath := canonicalSettingsPath(t, googlePath)
 	store := NewStore(filepath.Join(root, "config", "settings.json"))
 	if _, _, err := store.Add("intranet", settingsPath); err != nil {
 		t.Fatalf("Add() error = %v", err)
@@ -104,14 +108,14 @@ func TestStoreRemovesAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Remove() error = %v", err)
 	}
-	if entry.Alias != "intranet" || entry.Path != settingsPath {
-		t.Errorf("Remove() entry = %#v, want intranet/%s", entry, settingsPath)
+	if entry.Alias != "intranet" || entry.Path != wantSettingsPath {
+		t.Errorf("Remove() entry = %#v, want intranet/%s", entry, wantSettingsPath)
 	}
 	entries, err := store.List()
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
-	if len(entries) != 1 || entries[0].Alias != "google" || entries[0].Path != googlePath {
+	if len(entries) != 1 || entries[0].Alias != "google" || entries[0].Path != wantGooglePath {
 		t.Errorf("List() entries = %#v, want only google mapping", entries)
 	}
 	if _, err := store.Remove("intranet"); err == nil || !strings.Contains(err.Error(), "not configured") {
@@ -154,4 +158,13 @@ func writeSettingsFile(t *testing.T, path string) string {
 		t.Fatalf("Abs() error = %v", err)
 	}
 	return filepath.Clean(absolutePath)
+}
+
+func canonicalSettingsPath(t *testing.T, path string) string {
+	t.Helper()
+	resolvedPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("EvalSymlinks() error = %v", err)
+	}
+	return filepath.Clean(resolvedPath)
 }
