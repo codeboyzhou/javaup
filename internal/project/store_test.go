@@ -140,6 +140,24 @@ func TestConfigStoreFindsConfigurationFromProjectDescendant(t *testing.T) {
 	}
 }
 
+func TestSamePathResolvesSymbolicLinks(t *testing.T) {
+	t.Parallel()
+
+	temporary := t.TempDir()
+	target := filepath.Join(temporary, "target")
+	if err := os.Mkdir(target, 0o750); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
+	link := filepath.Join(temporary, "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("Symlink() error = %v", err)
+	}
+
+	if !samePath(link, target) {
+		t.Errorf("samePath(%q, %q) = false, want true", link, target)
+	}
+}
+
 func TestConfigStoreRejectsOutdatedConfiguration(t *testing.T) {
 	t.Parallel()
 

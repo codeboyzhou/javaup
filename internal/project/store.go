@@ -171,16 +171,26 @@ func sanitizeName(value string) string {
 }
 
 func samePath(left, right string) bool {
+	left = filepath.Clean(left)
+	right = filepath.Clean(right)
+	if left == right {
+		return true
+	}
 	if runtime.GOOS == "windows" {
 		if strings.EqualFold(left, right) {
 			return true
 		}
-		resolvedLeft, leftErr := filepath.EvalSymlinks(left)
-		resolvedRight, rightErr := filepath.EvalSymlinks(right)
-		if leftErr == nil && rightErr == nil {
-			return strings.EqualFold(filepath.Clean(resolvedLeft), filepath.Clean(resolvedRight))
-		}
+	}
+
+	resolvedLeft, leftErr := filepath.EvalSymlinks(left)
+	resolvedRight, rightErr := filepath.EvalSymlinks(right)
+	if leftErr != nil || rightErr != nil {
 		return false
 	}
-	return left == right
+	resolvedLeft = filepath.Clean(resolvedLeft)
+	resolvedRight = filepath.Clean(resolvedRight)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(resolvedLeft, resolvedRight)
+	}
+	return resolvedLeft == resolvedRight
 }
