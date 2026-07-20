@@ -67,6 +67,32 @@ build process. **Apache Maven** is currently the supported build tool.
 
 ## Installation
 
+### Install on macOS or Linux
+
+Run in a terminal:
+
+```shell
+curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/install.sh | sh
+```
+
+The installer detects the operating system and architecture, verifies the
+downloaded release's SHA-256 checksum, installs `jup` under `~/.javaup/bin`,
+and updates the appropriate shell profile. Set `JUP_VERSION`,
+`JUP_INSTALL_DIR`, or `JUP_NO_MODIFY_PATH` to customize the installation.
+
+### Install on Windows
+
+Run in PowerShell 5.1 or later:
+
+```powershell
+irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
+```
+
+The installer downloads the latest Windows release, verifies its SHA-256
+checksum, installs `jup.exe` under `%USERPROFILE%\.javaup\bin`, and adds that
+directory to the user PATH. Set `JUP_VERSION`, `JUP_INSTALL_DIR`, or
+`JUP_NO_MODIFY_PATH` before running the command to customize the installation.
+
 ### Install with Go
 
 Use the Go version declared in [`go.mod`](go.mod), or a newer version:

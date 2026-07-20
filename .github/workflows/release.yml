@@ -127,12 +127,18 @@ jobs:
       contents: write
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: dist
           merge-multiple: true
+
+      - name: Stage installer
+        run: cp install.ps1 install.sh dist/
 
       - name: Generate checksums
         shell: bash

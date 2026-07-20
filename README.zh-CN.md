@@ -55,6 +55,30 @@
 
 ## 安装
 
+### 在 macOS 或 Linux 上安装
+
+在终端中运行：
+
+```shell
+curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/install.sh | sh
+```
+
+安装脚本会识别操作系统和处理器架构、校验发行包的 SHA-256，将 `jup` 安装到
+`~/.javaup/bin`，并更新对应的 shell 配置文件。可通过 `JUP_VERSION`、
+`JUP_INSTALL_DIR` 或 `JUP_NO_MODIFY_PATH` 自定义安装行为。
+
+### 在 Windows 上安装
+
+在 PowerShell 5.1 或更高版本中运行：
+
+```powershell
+irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
+```
+
+安装脚本会下载最新的 Windows 发行版、校验 SHA-256，将 `jup.exe` 安装到
+`%USERPROFILE%\.javaup\bin`，并把该目录加入用户 PATH。执行安装命令前可通过
+`JUP_VERSION`、`JUP_INSTALL_DIR` 或 `JUP_NO_MODIFY_PATH` 自定义安装行为。
+
 ### 使用 Go 安装
 
 需要使用 [`go.mod`](go.mod) 中声明的 Go 版本或更高版本：
