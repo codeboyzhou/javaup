@@ -99,6 +99,23 @@ func TestDetectorIgnoresNonMavenProject(t *testing.T) {
 	}
 }
 
+func TestExecRunnerReportsMissingMavenFromPATH(t *testing.T) {
+	t.Parallel()
+
+	const executable = "jup-test-missing-maven-executable"
+	root := t.TempDir()
+	_, err := (execRunner{}).Run(context.Background(), root, executable)
+	if err == nil {
+		t.Fatal("Run() error = nil, want missing Maven error")
+	}
+	if !strings.Contains(err.Error(), `maven executable "`+executable+`" was not found in PATH`) {
+		t.Fatalf("Run() error = %q, want PATH guidance", err)
+	}
+	if strings.Contains(err.Error(), filepath.Join(root, executable)) {
+		t.Errorf("Run() error = %q, want unresolved command name", err)
+	}
+}
+
 func TestMavenVersionCommandRunsWindowsBatchFile(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("Windows batch compatibility test")

@@ -34,6 +34,15 @@ func (execRunner) Run(ctx context.Context, root, executable string) ([]byte, err
 	command.Dir = root
 	output, err := command.CombinedOutput()
 	if err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			if filepath.IsAbs(executable) {
+				return nil, fmt.Errorf("maven executable does not exist: %s", executable)
+			}
+			return nil, fmt.Errorf(
+				"maven executable %q was not found in PATH; install Maven, add mvn to PATH, or add Maven Wrapper to the project",
+				executable,
+			)
+		}
 		return nil, fmt.Errorf("run %s --version: %w: %s", executable, err, strings.TrimSpace(string(output)))
 	}
 	return output, nil
@@ -106,7 +115,7 @@ func (d *Detector) Detect(ctx context.Context, root string) (buildtool.Detection
 func resolveExecutable(executable string) string {
 	resolved, err := exec.LookPath(executable)
 	if err != nil {
-		resolved = executable
+		return filepath.Clean(executable)
 	}
 	absolute, err := filepath.Abs(resolved)
 	if err == nil {
