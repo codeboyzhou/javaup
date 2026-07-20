@@ -8,7 +8,7 @@
   <a href="https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
-<p align="center"><strong>让每个 Java 项目自动用对 JDK，用对 Maven，也用对 <code>settings.xml</code>。</strong></p>
+<p align="center"><strong>让每一次 Java 项目构建自动用对 JDK，用对 Maven，用对 <code>settings.xml</code>。</strong></p>
 
 <p align="center">
   <a href="#为什么打造-javaup">为什么打造 javaup</a> |

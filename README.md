@@ -8,7 +8,7 @@
   <a href="https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
-<p align="center"><strong>The right JDK, the right Maven, the right <code>settings.xml</code>, automatically, for every project.</strong></p>
+<p align="center"><strong>The right JDK, the right Maven, the right <code>settings.xml</code>, automatically, for every project build.</strong></p>
 
 <p align="center">
   <a href="#why-javaup-created">Why javaup created</a> |
