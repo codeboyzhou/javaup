@@ -48,6 +48,7 @@ func (l *Locator) Locate(ctx context.Context, version string, preferred ...Insta
 	if executable, err := exec.LookPath(javacExecutable()); err == nil {
 		candidates = append(candidates, filepath.Dir(filepath.Dir(executable)))
 	}
+	candidates = append(candidates, siblingCandidates(candidates)...)
 	candidates = append(candidates, toolchainCandidates()...)
 	candidates = append(candidates, platformCandidates()...)
 
@@ -100,6 +101,58 @@ func environmentCandidates() []string {
 		}
 	}
 	return candidates
+}
+
+func siblingCandidates(candidates []string) []string {
+	var siblings []string
+	seenParents := make(map[string]struct{})
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(expandHome(candidate))
+		if candidate == "" {
+			continue
+		}
+		absolute, err := filepath.Abs(candidate)
+		if err != nil {
+			continue
+		}
+		absolute = filepath.Clean(absolute)
+		parent := filepath.Dir(absolute)
+		if parent == absolute {
+			continue
+		}
+
+		key := parent
+		if runtime.GOOS == "windows" {
+			key = strings.ToLower(key)
+		}
+		if _, exists := seenParents[key]; exists {
+			continue
+		}
+		seenParents[key] = struct{}{}
+
+		entries, err := os.ReadDir(parent)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if (entry.IsDir() || entry.Type()&os.ModeSymlink != 0) && looksLikeJDKDirectory(entry.Name()) {
+				siblings = append(siblings, filepath.Join(parent, entry.Name()))
+			}
+		}
+	}
+	return siblings
+}
+
+func looksLikeJDKDirectory(name string) bool {
+	name = strings.ToLower(name)
+	for _, marker := range []string{
+		"java", "jdk", "temurin", "corretto", "zulu", "liberica", "graal", "semeru", "sapmachine",
+	} {
+		if strings.Contains(name, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func toolchainCandidates() []string {
