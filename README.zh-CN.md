@@ -1,31 +1,26 @@
-# javaup
+<h1 align="center">javaup — 一款多项目 Java 工具链管理器</h1>
 
-[English](README.md) | **简体中文**
+<p align="center"><a href="README.md">English</a> | 简体中文</p>
 
-> **让每个 Java 项目自动用对 JDK，也用对 Maven。**
+<p align="center">
+  <img alt="Go Version" src="https://img.shields.io/github/go-mod/go-version/codeboyzhou/javaup">
+  <img alt="Platform" src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue">
+  <a href="https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml/badge.svg"></a>
+</p>
 
-[![CI](https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml/badge.svg)](https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+<p align="center"><strong>让每个 Java 项目自动用对 JDK，用对 Maven，也用对 <code>settings.xml</code>。</strong></p>
 
-`javaup`（命令名 `jup`）是一个面向项目的 Java 工具链管理器。它从 Maven
-项目中识别构建所需的 Java 版本，找到本机匹配的 JDK，并记住项目应使用的
-Maven、JDK 与 `settings.xml`。之后，无论当前 shell 默认使用哪个 Java 版本，
-都可以通过同一条命令在正确的工具链环境中执行构建。
+<p align="center">
+  <a href="#为什么打造-javaup">为什么打造 javaup</a> |
+  <a href="#功能亮点">功能亮点</a> |
+  <a href="#安装">安装</a> |
+  <a href="#快速开始">快速开始</a> |
+  <a href="#命令指南">命令指南</a>
+</p>
 
-```text
-pom.xml / Maven Wrapper / PATH / installed JDKs
-                         │
-                         ▼
-                      jup init
-                         │
-                         ▼
-          project-specific Maven + JDK configuration
-                         │
-                         ▼
-               jup run mvn clean package
-```
+`javaup`（命令名 `jup`）能够识别 Maven 项目所需的 Java 版本，找到匹配的本地 JDK，并记住项目对应的 Maven、JDK 和 `settings.xml`。一次配置，随时可用。并且完全不会对当前 shell 和你的系统环境变量动任何手脚。
 
-## 为什么需要 javaup
+## 为什么打造 javaup
 
 一台开发机上往往同时存在多个项目：旧项目仍要求 Java 8，新服务使用 Java 17，
 另一个项目可能已经升级到 Java 21。没有项目级工具链管理时，开发者需要反复修改

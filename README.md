@@ -1,32 +1,27 @@
-# javaup
+<h1 align="center">javaup — Project-aware Java Toolchain Manager</h1>
 
-**English** | [简体中文](README.zh-CN.md)
+<p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
 
-> **The right JDK and the right Maven, automatically, for every project.**
+<p align="center">
+  <img alt="Go Version" src="https://img.shields.io/github/go-mod/go-version/codeboyzhou/javaup">
+  <img alt="Platform" src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue">
+  <a href="https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml/badge.svg"></a>
+</p>
 
-[![CI](https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml/badge.svg)](https://github.com/codeboyzhou/javaup/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+<p align="center"><strong>The right JDK, the right Maven, the right <code>settings.xml</code>, automatically, for every project.</strong></p>
 
-`javaup` (command: `jup`) is a project-aware Java toolchain manager. It reads the
-Java version required by a Maven project, locates a matching local JDK, and
-remembers the Maven executable, JDK, and `settings.xml` that belong to the
-project. Once initialized, a project can always build with the correct
-toolchain, regardless of the Java version selected in the current shell.
+<p align="center">
+  <a href="#why-javaup-created">Why javaup created</a> |
+  <a href="#highlights">Highlights</a> |
+  <a href="#installation">Installation</a> |
+  <a href="#quick-start">Quick Start</a> |
+  <a href="#command-guide">Command Guide</a>
+</p>
 
-```text
-pom.xml / Maven Wrapper / PATH / installed JDKs
-                         │
-                         ▼
-                      jup init
-                         │
-                         ▼
-          project-specific Maven + JDK configuration
-                         │
-                         ▼
-               jup run mvn clean package
-```
+`javaup` (command: `jup`) detects the Java version required by a Maven project,
+locates a matching local JDK, and remembers its Maven, JDK, and `settings.xml`. Configure once, run anytime — without modifying the current shell or your system env.
 
-## Why javaup exists
+## Why javaup created
 
 A development machine often hosts projects from several Java generations: a
 legacy application may still require Java 8, a current service may use Java 17,
