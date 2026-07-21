@@ -42,7 +42,15 @@ func TestRunValidatesAndAppliesManagedInstall(t *testing.T) {
 	if !result.Purged || !result.Pending || result.Home != home {
 		t.Errorf("Run() = %+v", result)
 	}
-	if applied.Home != home || applied.Target != target || !applied.Purge {
+	appliedTargetInfo, err := os.Stat(applied.Target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applied.Home != home || !os.SameFile(appliedTargetInfo, targetInfo) || !applied.Purge {
 		t.Errorf("applied plan = %+v", applied)
 	}
 }

@@ -22,7 +22,7 @@ func TestApplyUninstallPreservesConfiguration(t *testing.T) {
 	if err := os.MkdirAll(binDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(target, []byte("binary"), 0o700); err != nil {
+	if err := os.WriteFile(target, []byte("binary"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(config, []byte("{}"), 0o600); err != nil {
@@ -74,7 +74,7 @@ func TestApplyUninstallPurgesData(t *testing.T) {
 	if err := os.MkdirAll(binDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(target, []byte("binary"), 0o700); err != nil {
+	if err := os.WriteFile(target, []byte("binary"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := applyUninstall(plan{

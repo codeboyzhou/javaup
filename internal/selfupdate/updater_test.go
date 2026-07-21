@@ -98,8 +98,16 @@ func TestUpdateDownloadsVerifiesAndStagesRelease(t *testing.T) {
 	updater.ExecutablePath = target
 	updater.apply = func(staged, gotTarget string) (bool, error) {
 		applied = true
-		if gotTarget != target {
-			t.Errorf("target = %q, want %q", gotTarget, target)
+		gotTargetInfo, err := os.Stat(gotTarget)
+		if err != nil {
+			return false, err
+		}
+		targetInfo, err := os.Stat(target)
+		if err != nil {
+			return false, err
+		}
+		if !os.SameFile(gotTargetInfo, targetInfo) {
+			t.Errorf("target %q and expected target %q are different files", gotTarget, target)
 		}
 		// #nosec G304 -- staged is created by the updater inside t.TempDir().
 		got, err := os.ReadFile(staged)
