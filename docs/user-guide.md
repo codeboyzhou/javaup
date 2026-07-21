@@ -204,6 +204,27 @@ Git revision used for the build:
 javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 ```
 
+## Self-update
+
+Check for a newer stable GitHub Release without changing the executable:
+
+```shell
+jup update --check
+```
+
+Download and install it:
+
+```shell
+jup update
+```
+
+The updater selects the archive for the current operating system and
+architecture, verifies it against the release's `checksums.txt`, and only then
+replaces the executable that launched the command. If the current version is
+already the latest (or newer), no files are changed. On Windows, replacement
+finishes immediately after the `jup update` process exits because a running
+`.exe` cannot replace itself.
+
 ## Configuration storage
 
 Project configurations and Maven settings aliases live under `JAVAUP_HOME` and

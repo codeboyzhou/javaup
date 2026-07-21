@@ -197,6 +197,8 @@ jup run mvn clean deploy
 | `jup settings unset` | 取消项目的 settings 绑定 |
 | `jup settings remove <别名>` | 删除全局别名 |
 | `jup uninit` | 删除项目保存的 `jup` 配置 |
+| `jup update --check` | 检查是否有新版本 |
+| `jup update` | 下载、校验并安装最新版本 |
 
 Java 版本探测规则、JDK 查找顺序、配置存储和完整排障说明请阅读
 [详细用户指南](docs/user-guide.zh-CN.md)。

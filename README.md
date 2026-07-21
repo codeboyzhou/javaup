@@ -213,6 +213,8 @@ settings.
 | `jup settings unset` | Remove the project's settings binding |
 | `jup settings remove <alias>` | Remove a global alias |
 | `jup uninit` | Remove the project's saved `jup` configuration |
+| `jup update --check` | Check whether a newer release is available |
+| `jup update` | Download, verify, and install the latest release |
 
 See the [full user guide](docs/user-guide.md) for detection rules,
 configuration storage, detailed command behavior, and troubleshooting.

@@ -184,6 +184,25 @@ jup --version
 javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
 ```
 
+## 自更新
+
+只检查是否有新的稳定版 GitHub Release，不修改当前程序：
+
+```shell
+jup update --check
+```
+
+下载并安装新版本：
+
+```shell
+jup update
+```
+
+更新程序会根据当前操作系统和处理器架构选择安装包，使用 Release 中的
+`checksums.txt` 校验完成后才替换发起命令的可执行文件。如果当前版本已经是最新版或
+更高版本，不会修改任何文件。Windows 不允许运行中的 `.exe` 替换自身，因此替换会在
+`jup update` 进程退出后立即完成。
+
 ## 配置存储
 
 项目配置和 Maven settings 别名保存在 `JAVAUP_HOME` 下，不会写入项目仓库；
