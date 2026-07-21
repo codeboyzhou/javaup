@@ -235,6 +235,32 @@ installation.
 
 ## Troubleshooting
 
+### The IDEA terminal cannot find `jup` after installation
+
+Windows processes inherit environment variables only when they start. The
+installer adds `%USERPROFILE%\.javaup\bin` to the user PATH and notifies Windows
+about the environment change, but IDEA, JetBrains Toolbox, and terminals that
+were already running during installation may retain the old PATH. The installer
+updates its own PowerShell process immediately, so `jup` can work in Windows
+Terminal while an IDEA terminal still cannot find it.
+
+Exit IDEA completely. If IDEA is launched through JetBrains Toolbox, also exit
+Toolbox from the system tray, then reopen both applications and create a new
+terminal. If that still does not work, sign out of Windows and sign back in so
+every process reloads the user PATH. Verify the result in a new IDEA terminal:
+
+```powershell
+Get-Command jup
+[Environment]::GetEnvironmentVariable('Path', 'User')
+```
+
+To repair only the current PowerShell session immediately, run:
+
+```powershell
+$env:Path = "$env:USERPROFILE\.javaup\bin;$env:Path"
+jup version
+```
+
 ### Maven is installed, but `mvn` is not found
 
 Check Maven in the same terminal:
@@ -244,8 +270,9 @@ mvn --version
 ```
 
 Restart the terminal after changing environment variables. An IDE terminal
-often requires restarting the entire IDE so its parent process reloads PATH.
-If global Maven is unavailable, add Maven Wrapper to the project.
+often requires fully exiting the IDE and any resident launcher so its parent
+process reloads PATH. If global Maven is unavailable, add Maven Wrapper to the
+project.
 
 ### A JDK is installed, but `jup` cannot find it
 

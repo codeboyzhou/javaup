@@ -106,6 +106,48 @@ function Test-Checksum([string]$File, [string]$Expected) {
   }
 }
 
+function Send-EnvironmentChangeNotification {
+  try {
+    if (-not ('JavaupInstaller.NativeMethods' -as [type])) {
+      Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+namespace JavaupInstaller {
+  public static class NativeMethods {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(
+      IntPtr window,
+      uint message,
+      UIntPtr wParam,
+      string lParam,
+      uint flags,
+      uint timeout,
+      out UIntPtr result
+    );
+  }
+}
+'@
+    }
+
+    $result = [UIntPtr]::Zero
+    $null = [JavaupInstaller.NativeMethods]::SendMessageTimeout(
+      [IntPtr]0xffff,
+      0x001a,
+      [UIntPtr]::Zero,
+      'Environment',
+      0x0002,
+      5000,
+      [ref]$result
+    )
+    Write-Step 'Notified Windows that the user environment changed'
+  } catch {
+    # The PATH is already persisted. A notification failure only means that
+    # applications may need a full restart (including a resident launcher).
+    Write-Step 'PATH was saved; fully restart open terminals and application launchers to reload it'
+  }
+}
+
 function Add-ToUserPath([string]$Directory) {
   if ($JavaupNoModifyPath) {
     Write-Step 'Skipping PATH update because JAVAUP_NO_MODIFY_PATH is set'
@@ -124,6 +166,7 @@ function Add-ToUserPath([string]$Directory) {
       continue
     }
     if ([string]::Equals($normalizedEntry, $normalizedDirectory, [StringComparison]::OrdinalIgnoreCase)) {
+      Send-EnvironmentChangeNotification
       Write-Step "$normalizedDirectory is already in the user PATH"
       return
     }
@@ -132,6 +175,7 @@ function Add-ToUserPath([string]$Directory) {
   $newPath = if ($current) { "$normalizedDirectory;$current" } else { $normalizedDirectory }
   [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
   $env:Path = "$normalizedDirectory;$env:Path"
+  Send-EnvironmentChangeNotification
   Write-Step "Added $normalizedDirectory to the user PATH"
 }
 
@@ -214,6 +258,7 @@ try {
 
     Write-Step "Installed jup $tag to $destination"
     Write-Step 'Run: jup version'
+    Write-Step 'Restart applications that were open during installation before using jup in them'
   } finally {
     Remove-Item -LiteralPath $temporary -Recurse -Force -ErrorAction SilentlyContinue
   }

@@ -213,6 +213,29 @@ Release 安装器也会将可执行文件放在其中的 `bin` 目录。
 
 ## 常见问题
 
+### 安装后 IDEA 内置终端找不到 `jup`
+
+Windows 进程只在启动时继承环境变量。安装器会把 `%USERPROFILE%\.javaup\bin`
+写入用户 PATH，并通知 Windows 环境已经变化，但安装期间已经运行的 IDEA、JetBrains
+Toolbox 和终端仍可能保留旧 PATH。安装命令所在的 PowerShell 会被安装器立即更新，
+所以可能出现 Windows Terminal 能运行 `jup`、IDEA 内置终端却找不到的情况。
+
+完全退出 IDEA；如果通过 JetBrains Toolbox 启动，还要从系统托盘退出 Toolbox，然后
+重新打开两者并新建终端。仍未生效时，注销并重新登录 Windows 可以确保所有进程重新
+读取用户 PATH。可以在新的 IDEA 终端中检查：
+
+```powershell
+Get-Command jup
+[Environment]::GetEnvironmentVariable('Path', 'User')
+```
+
+只想立即修复当前 PowerShell 终端时，可以执行：
+
+```powershell
+$env:Path = "$env:USERPROFILE\.javaup\bin;$env:Path"
+jup version
+```
+
 ### Maven 已安装，但找不到 `mvn`
 
 先在同一个终端确认 Maven：
@@ -221,8 +244,9 @@ Release 安装器也会将可执行文件放在其中的 `bin` 目录。
 mvn --version
 ```
 
-如果刚修改过环境变量，需要重启终端；IDE 内置终端通常需要重启整个 IDE，才能让
-父进程重新加载 PATH。没有全局 Maven 时，也可以为项目添加 Maven Wrapper。
+如果刚修改过环境变量，需要重启终端；IDE 内置终端通常需要完全退出 IDE 及其常驻
+启动器，才能让父进程重新加载 PATH。没有全局 Maven 时，也可以为项目添加 Maven
+Wrapper。
 
 ### JDK 已安装，但 `jup` 没有找到
 
