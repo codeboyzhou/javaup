@@ -203,6 +203,34 @@ jup update
 更高版本，不会修改任何文件。Windows 不允许运行中的 `.exe` 替换自身，因此替换会在
 `jup update` 进程退出后立即完成。
 
+## 卸载
+
+卸载通过 Release 安装器安装的程序，同时保留项目配置和 Maven settings 别名：
+
+```shell
+jup uninstall
+```
+
+该命令会删除可执行文件和安装器写入的 PATH 条目。如果安装时保存了自定义
+`JAVAUP_HOME`，它会与配置一起保留，便于以后重新安装时继续使用相同数据。已经打开
+的终端需要重启后才能继承新的环境设置。
+
+如果还要删除 `JAVAUP_HOME` 下的全部数据，包括所有项目配置和 Maven settings
+别名，需要显式执行：
+
+```shell
+jup uninstall --purge
+```
+
+`--purge` 不可撤销。卸载程序会拒绝删除文件系统根目录、包含用户主目录的路径，以及
+`JAVAUP_HOME/bin` 以外的可执行文件。Windows 会在命令退出后完成删除；Linux 和
+macOS 只会从已知 shell 配置文件中删除安装器写入的精确配置，不会修改其他内容。
+彻底清除时也会删除安装器保存的自定义 `JAVAUP_HOME` 设置。
+
+该命令不会删除通过 `go install` 或其他包管理器安装的程序；请使用原包管理器卸载，
+或手工删除对应的可执行文件。`jup uninit` 的含义不同：它只删除当前项目的配置，不会
+卸载 jup。
+
 ## 配置存储
 
 项目配置和 Maven settings 别名保存在 `JAVAUP_HOME` 下，不会写入项目仓库；

@@ -22,7 +22,7 @@ func TestAppRun(t *testing.T) {
 		{
 			name:       "no arguments shows help",
 			wantCode:   exitSuccess,
-			wantOutput: []string{"Usage:\n  jup [flags]", "help", "run", "status", "update", "version"},
+			wantOutput: []string{"Usage:\n  jup [flags]", "help", "run", "status", "uninstall", "update", "version"},
 		},
 		{
 			name:       "help command shows help",

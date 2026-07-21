@@ -225,6 +225,39 @@ already the latest (or newer), no files are changed. On Windows, replacement
 finishes immediately after the `jup update` process exits because a running
 `.exe` cannot replace itself.
 
+## Uninstall
+
+Remove an installation created by the release installer while preserving
+project configurations and Maven settings aliases:
+
+```shell
+jup uninstall
+```
+
+The command removes the executable and the PATH entry written by the installer.
+If a custom `JAVAUP_HOME` was saved during installation, it is preserved with
+the configuration so a later reinstall can find the same data. Existing
+terminal processes keep their inherited environment until they are restarted.
+
+To also delete all data under `JAVAUP_HOME`, including every saved project
+configuration and Maven settings alias, explicitly use:
+
+```shell
+jup uninstall --purge
+```
+
+`--purge` is irreversible. The uninstaller rejects filesystem roots, a path
+that contains the user home directory, and executables outside
+`JAVAUP_HOME/bin`. On Windows, removal finishes after the command exits. On
+Linux and macOS, only the exact installer-managed block is removed from known
+shell profiles; unrelated profile content is preserved. Purging also removes a
+custom `JAVAUP_HOME` setting that was saved by the installer.
+
+The command intentionally does not remove binaries installed by `go install`
+or another package manager. Remove those with the same tool or delete their
+binary manually. `jup uninit` is different: it removes only the configuration
+for the current project and does not uninstall jup.
+
 ## Configuration storage
 
 Project configurations and Maven settings aliases live under `JAVAUP_HOME` and

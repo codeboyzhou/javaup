@@ -36,6 +36,7 @@ func newRootCommand(options Options) *cobra.Command {
 		defaultWorkingDirectory,
 	))
 	root.AddCommand(newStatusCommand(defaultInspectorFactory, defaultWorkingDirectory))
+	root.AddCommand(newUninstallCommand(defaultApplicationUninstaller))
 	root.AddCommand(newUpdateCommand(defaultUpdateService(options.Version)))
 	root.AddCommand(newVersionCommand(version))
 

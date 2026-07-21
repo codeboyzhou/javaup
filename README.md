@@ -213,6 +213,8 @@ settings.
 | `jup settings unset` | Remove the project's settings binding |
 | `jup settings remove <alias>` | Remove a global alias |
 | `jup uninit` | Remove the project's saved `jup` configuration |
+| `jup uninstall` | Uninstall jup while preserving configuration |
+| `jup uninstall --purge` | Uninstall jup and remove all javaup data |
 | `jup update --check` | Check whether a newer release is available |
 | `jup update` | Download, verify, and install the latest release |
 
