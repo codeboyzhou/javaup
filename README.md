@@ -39,7 +39,7 @@ $ jup run mvn test
 > [!IMPORTANT]
 > `jup` selects toolchains that are already installed. It does not download or
 > uninstall JDKs or Maven. Apache Maven is the only supported build tool in
-> v0.1.0.
+> v0.2.0.
 
 ## Why javaup?
 
@@ -128,7 +128,7 @@ The installers support these optional environment variables:
 
 | Variable | Purpose |
 |---|---|
-| `JAVAUP_VERSION` | Install a specific release, such as `v0.1.0` |
+| `JAVAUP_VERSION` | Install a specific release, such as `v0.2.0` |
 | `JAVAUP_HOME` | Use a custom absolute installation and configuration directory |
 | `JAVAUP_NO_MODIFY_PATH` | Install without updating the shell profile or user PATH |
 
@@ -223,9 +223,9 @@ configuration storage, detailed command behavior, and troubleshooting.
 
 ## Project status and scope
 
-v0.1.0 is the first public release of `javaup`. Release archives are built for
-Windows, macOS, and Linux on amd64 and arm64, and every archive is covered by a
-published SHA-256 checksum.
+v0.2.0 adds built-in, checksum-verified self-update and safe uninstall
+workflows. Release archives are built for Windows, macOS, and Linux on amd64
+and arm64, and every archive is covered by a published SHA-256 checksum.
 
 Current boundaries:
 

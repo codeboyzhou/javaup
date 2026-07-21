@@ -6,7 +6,7 @@
 #   curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/install.sh | sh
 #
 # Optional environment variables:
-#   JAVAUP_VERSION         Release version to install, such as v0.1.0 or 0.1.0
+#   JAVAUP_VERSION         Release version to install, such as v0.2.0 or 0.2.0
 #   JAVAUP_HOME            Application directory; defaults to $HOME/.javaup
 #   JAVAUP_NO_MODIFY_PATH  Skip the shell profile update when set to a non-empty value
 

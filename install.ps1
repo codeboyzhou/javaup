@@ -6,12 +6,12 @@
   irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
 
 .EXAMPLE
-  $env:JAVAUP_VERSION = 'v0.1.0'
+  $env:JAVAUP_VERSION = 'v0.2.0'
   irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
 
 .NOTES
   Optional environment variables:
-    JAVAUP_VERSION         Release version to install, such as v0.1.0 or 0.1.0
+    JAVAUP_VERSION         Release version to install, such as v0.2.0 or 0.2.0
     JAVAUP_HOME            Application directory; defaults to %USERPROFILE%\.javaup
     JAVAUP_NO_MODIFY_PATH  Skip the user PATH update when set to a non-empty value
 #>

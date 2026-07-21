@@ -30,9 +30,9 @@ func TestNewInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := newInfo("v0.1.0", "testos", "testarch", tt.commit)
-			if got.Version != "v0.1.0" {
-				t.Errorf("Version = %q, want %q", got.Version, "v0.1.0")
+			got := newInfo("v0.2.0", "testos", "testarch", tt.commit)
+			if got.Version != "v0.2.0" {
+				t.Errorf("Version = %q, want %q", got.Version, "v0.2.0")
 			}
 			if got.Platform != "testos/testarch" {
 				t.Errorf("Platform = %q, want %q", got.Platform, "testos/testarch")

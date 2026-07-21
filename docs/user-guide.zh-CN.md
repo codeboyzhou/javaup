@@ -2,7 +2,7 @@
 
 [English](user-guide.md) | 简体中文 | [返回 README](../README.zh-CN.md)
 
-本文档详细说明 `javaup` v0.1.0 的命令行为、工具链探测、配置存储和常见问题。
+本文档详细说明 `javaup` v0.2.0 的命令行为、工具链探测、配置存储和常见问题。
 
 ## 运行前提
 
@@ -181,7 +181,7 @@ jup --version
 版本输出包含语义版本、目标平台和构建对应的 Git 提交短哈希：
 
 ```text
-javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
+javaup version v0.2.0 windows/amd64 (64c2fb07bcad)
 ```
 
 ## 自更新

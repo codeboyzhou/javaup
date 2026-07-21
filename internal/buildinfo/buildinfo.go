@@ -10,7 +10,7 @@ const shortCommitLength = 12
 
 var (
 	// Version is the semantic version reported by the application.
-	Version = "v0.1.0"
+	Version = "v0.2.0"
 	// Commit optionally overrides the revision embedded by the Go toolchain.
 	Commit string
 )

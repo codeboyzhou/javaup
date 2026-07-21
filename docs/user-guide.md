@@ -3,7 +3,7 @@
 English | [简体中文](user-guide.zh-CN.md) | [Back to README](../README.md)
 
 This guide documents command behavior, toolchain detection, configuration
-storage, and troubleshooting for `javaup` v0.1.0.
+storage, and troubleshooting for `javaup` v0.2.0.
 
 ## Prerequisites
 
@@ -201,7 +201,7 @@ Version output contains the semantic version, target platform, and abbreviated
 Git revision used for the build:
 
 ```text
-javaup version v0.1.0 windows/amd64 (64c2fb07bcad)
+javaup version v0.2.0 windows/amd64 (64c2fb07bcad)
 ```
 
 ## Self-update
