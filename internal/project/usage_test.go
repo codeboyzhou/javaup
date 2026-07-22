@@ -28,7 +28,11 @@ func TestUsageStoreAppliesFourteenDayHalfLife(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	record := usage[projectPathIdentity(root)]
+	canonicalRoot, err := canonicalProjectRoot(root)
+	if err != nil {
+		t.Fatalf("canonicalProjectRoot() error = %v", err)
+	}
+	record := usage[projectPathIdentity(canonicalRoot)]
 	if record.UseCount != 2 {
 		t.Errorf("UseCount = %d, want 2", record.UseCount)
 	}
@@ -85,7 +89,7 @@ func TestCatalogRanksByDecayedFrequencyAndFiltersBuildTool(t *testing.T) {
 	if len(candidates) != 2 {
 		t.Fatalf("List() candidates = %d, want 2", len(candidates))
 	}
-	if candidates[0].ProjectRoot != frequentRoot || candidates[1].ProjectRoot != recentRoot {
+	if !samePath(candidates[0].ProjectRoot, frequentRoot) || !samePath(candidates[1].ProjectRoot, recentRoot) {
 		t.Errorf("List() order = %q, %q; want frequent then recent", candidates[0].ProjectRoot, candidates[1].ProjectRoot)
 	}
 	if candidates[0].Name != candidates[1].Name {
