@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/codeboyzhou/javaup/internal/buildtool"
 	"github.com/codeboyzhou/javaup/internal/mavensettings"
@@ -34,6 +35,10 @@ type processExecutor interface {
 	Execute(ctx context.Context, spec processSpec) error
 }
 
+type projectUsageRecorder interface {
+	Touch(ctx context.Context, projectRoot string, at time.Time) error
+}
+
 type osProcessExecutor struct{}
 
 func (osProcessExecutor) Execute(ctx context.Context, spec processSpec) error {
@@ -51,6 +56,8 @@ type Runner struct {
 	store    configFinder
 	settings mavenSettingsResolver
 	executor processExecutor
+	usage    projectUsageRecorder
+	now      func() time.Time
 }
 
 // NewDefaultRunner creates a runner backed by the user project configuration store.
@@ -63,12 +70,18 @@ func NewDefaultRunner() (*Runner, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewRunnerWithMavenSettings(store, settings, osProcessExecutor{}), nil
+	usage, err := NewDefaultUsageStore()
+	if err != nil {
+		return nil, err
+	}
+	runner := NewRunnerWithMavenSettings(store, settings, osProcessExecutor{})
+	runner.usage = usage
+	return runner, nil
 }
 
 // NewRunner creates a project command runner from replaceable services.
 func NewRunner(store configFinder, executor processExecutor) *Runner {
-	return &Runner{store: store, executor: executor}
+	return &Runner{store: store, executor: executor, now: time.Now}
 }
 
 // NewRunnerWithMavenSettings creates a runner that resolves saved Maven settings aliases.
@@ -77,7 +90,7 @@ func NewRunnerWithMavenSettings(
 	settings mavenSettingsResolver,
 	executor processExecutor,
 ) *Runner {
-	return &Runner{store: store, settings: settings, executor: executor}
+	return &Runner{store: store, settings: settings, executor: executor, now: time.Now}
 }
 
 // Run executes the requested build tool saved for the project containing root.
@@ -110,6 +123,11 @@ func (r *Runner) Run(
 	directory, err := filepath.Abs(root)
 	if err != nil {
 		return fmt.Errorf("resolve command directory: %w", err)
+	}
+	if r.usage != nil {
+		if err := r.usage.Touch(ctx, config.ProjectRoot, r.now()); err != nil && streams.Stderr != nil {
+			_, _ = fmt.Fprintf(streams.Stderr, "jup: warning: update project usage: %v\n", err)
+		}
 	}
 
 	err = r.executor.Execute(ctx, processSpec{

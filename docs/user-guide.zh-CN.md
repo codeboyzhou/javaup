@@ -103,14 +103,22 @@ jup run mvn clean package -DskipTests
 jup run mvn dependency:tree
 ```
 
-每次运行时，`jup` 都会：
+在交互式终端中，每次运行时 `jup` 都会：
 
-1. 从当前目录向上查找最近的已初始化项目；
-2. 检查保存的 Maven 可执行文件是否仍然存在；
-3. 为子进程设置保存的 `JAVA_HOME`；
-4. 将对应 JDK 的 `bin` 放到子进程 PATH 首位；
-5. 如果项目绑定了 settings 别名，在参数前加入 `--settings <path>`；
-6. 从当前目录启动 Maven，而不是强制切换到项目根目录。
+1. 加载所有已初始化的 Maven 项目，即使当前终端不在项目目录中；
+2. 按带时间衰减的最近使用频率排序；
+3. 让用户使用上下方向键和回车选择项目；
+4. 检查所选项目保存的 Maven 可执行文件是否仍然存在；
+5. 为子进程设置保存的 `JAVA_HOME`；
+6. 将对应 JDK 的 `bin` 放到子进程 PATH 首位；
+7. 如果项目绑定了 settings 别名，在参数前加入 `--settings <path>`；
+8. 从所选项目保存的根目录启动 Maven。
+
+排序分数采用 14 天半衰期。短时间内反复使用的项目会快速靠前，长期未使用项目的
+历史权重会逐渐降低。列表同时显示完整路径，因此同名项目也可以明确区分。
+
+在 CI、输入重定向等非交互环境中，`jup` 不显示选择器，而是从当前目录向上查找
+最近的已初始化项目，并从当前目录启动 Maven，以保持现有自动化行为。
 
 Maven 的标准输入、标准输出和标准错误会直接连接到当前终端，交互行为、日志和退出码
 都会保留。当前 shell 的环境变量不会被修改。
@@ -166,8 +174,9 @@ jup settings remove intranet
 jup uninit
 ```
 
-该命令会删除从当前目录向上找到的最近一个已初始化项目配置。重复执行是安全的；如果
-没有配置，会提示无需删除。项目文件、JDK、Maven 安装和 settings 文件都不会被修改。
+该命令会删除从当前目录向上找到的最近一个已初始化项目配置及其使用排序记录。重复
+执行是安全的；如果没有配置，会提示无需删除。项目文件、JDK、Maven 安装和 settings
+文件都不会被修改。
 
 ## 帮助与版本
 
@@ -248,10 +257,12 @@ Release 安装器也会将可执行文件放在其中的 `bin` 目录。
 .javaup/
 ├── bin/
 │   └── jup                # Windows 上为 jup.exe
-└── config/
-    ├── projects/          # 每个已初始化项目一个 JSON 文件
-    └── maven/
-        └── settings.json  # Maven settings 别名注册表
+├── config/
+│   ├── projects/          # 每个已初始化项目一个 JSON 文件
+│   └── maven/
+│       └── settings.json  # Maven settings 别名注册表
+└── state/
+    └── project-usage.json # 项目最近使用频率排序
 ```
 
 安装或运行 `jup` 前，可以将 `JAVAUP_HOME` 设置为其他绝对路径。项目配置保存的是

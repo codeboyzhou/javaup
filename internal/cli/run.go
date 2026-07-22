@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 
@@ -22,7 +23,24 @@ type projectRunner interface {
 
 type runnerFactory func() (projectRunner, error)
 
+type projectPicker interface {
+	Pick(ctx context.Context, tool buildtool.Type, streams project.Streams) (string, error)
+}
+
+type projectPickerFactory func() (projectPicker, error)
+
+type interactiveTerminal func(stdin io.Reader, stdout io.Writer) bool
+
 func newRunCommand(factory runnerFactory, workingDirectory func() (string, error)) *cobra.Command {
+	return newRunCommandWithPicker(factory, workingDirectory, defaultProjectPickerFactory, isInteractiveTerminal)
+}
+
+func newRunCommandWithPicker(
+	factory runnerFactory,
+	workingDirectory func() (string, error),
+	pickerFactory projectPickerFactory,
+	isInteractive interactiveTerminal,
+) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "run",
 		Short: "Run a project build tool with its detected toolchain",
@@ -45,6 +63,8 @@ func newRunCommand(factory runnerFactory, workingDirectory func() (string, error
 			buildTool.description,
 			factory,
 			workingDirectory,
+			pickerFactory,
+			isInteractive,
 		))
 	}
 	return command
@@ -56,6 +76,8 @@ func newRunBuildToolCommand(
 	description string,
 	factory runnerFactory,
 	workingDirectory func() (string, error),
+	pickerFactory projectPickerFactory,
+	isInteractive interactiveTerminal,
 ) *cobra.Command {
 	return &cobra.Command{
 		Use:                name + " [arguments...]",
@@ -63,21 +85,43 @@ func newRunBuildToolCommand(
 		Args:               cobra.ArbitraryArgs,
 		DisableFlagParsing: true,
 		RunE: func(command *cobra.Command, args []string) error {
-			root, err := workingDirectory()
+			streams := project.Streams{
+				Stdin:  command.InOrStdin(),
+				Stdout: command.OutOrStdout(),
+				Stderr: command.ErrOrStderr(),
+			}
+			var root string
+			var err error
+			if isInteractive(streams.Stdin, streams.Stdout) {
+				picker, pickerErr := pickerFactory()
+				if pickerErr != nil {
+					return pickerErr
+				}
+				root, err = picker.Pick(command.Context(), tool, streams)
+			} else {
+				root, err = workingDirectory()
+				if err != nil {
+					err = fmt.Errorf("resolve current directory: %w", err)
+				}
+			}
 			if err != nil {
-				return fmt.Errorf("resolve current directory: %w", err)
+				return err
 			}
 			runner, err := factory()
 			if err != nil {
 				return err
 			}
-			return runner.Run(command.Context(), root, tool, args, project.Streams{
-				Stdin:  command.InOrStdin(),
-				Stdout: command.OutOrStdout(),
-				Stderr: command.ErrOrStderr(),
-			})
+			return runner.Run(command.Context(), root, tool, args, streams)
 		},
 	}
+}
+
+func defaultProjectPickerFactory() (projectPicker, error) {
+	catalog, err := project.NewDefaultCatalog()
+	if err != nil {
+		return nil, err
+	}
+	return newTerminalProjectPicker(catalog), nil
 }
 
 func defaultRunnerFactory() (projectRunner, error) {

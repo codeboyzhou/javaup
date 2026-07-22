@@ -16,6 +16,16 @@ type fakeConfigRemover struct {
 	removed bool
 }
 
+type recordingUsageRemover struct {
+	root string
+	err  error
+}
+
+func (r *recordingUsageRemover) Delete(_ context.Context, root string) error {
+	r.root = root
+	return r.err
+}
+
 func (r *fakeConfigRemover) Find(start string) (Config, string, bool, error) {
 	r.start = start
 	return r.config, r.path, r.found, nil
@@ -37,6 +47,8 @@ func TestUninitializerRemovesCurrentProjectConfiguration(t *testing.T) {
 		removed: true,
 	}
 	uninitializer := NewUninitializer(store)
+	usage := &recordingUsageRemover{}
+	uninitializer.usage = usage
 	var events []ProgressEvent
 
 	path, removed, err := uninitializer.Uninitialize(context.Background(), root, func(event ProgressEvent) {
@@ -60,6 +72,9 @@ func TestUninitializerRemovesCurrentProjectConfiguration(t *testing.T) {
 	}
 	if store.start != wantRoot {
 		t.Errorf("Find() start = %q, want %q", store.start, wantRoot)
+	}
+	if usage.root != wantRoot {
+		t.Errorf("usage Delete() root = %q, want %q", usage.root, wantRoot)
 	}
 
 	wantEvents := []ProgressEvent{

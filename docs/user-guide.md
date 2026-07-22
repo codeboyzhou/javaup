@@ -115,15 +115,26 @@ jup run mvn clean package -DskipTests
 jup run mvn dependency:tree
 ```
 
-For every invocation, `jup`:
+In an interactive terminal, every invocation:
 
-1. searches upward from the current directory for the nearest initialized
+1. loads every initialized Maven project, even when the terminal is outside a
    project;
-2. checks that the saved Maven executable still exists;
-3. sets the saved `JAVA_HOME` for the child process;
-4. places that JDK's `bin` first on the child process PATH;
-5. prepends `--settings <path>` when the project uses a settings alias;
-6. starts Maven in the current directory rather than forcing the project root.
+2. orders projects by a time-decaying recent-use frequency score;
+3. lets you choose with the Up/Down keys and Enter;
+4. checks that the selected Maven executable still exists;
+5. sets the saved `JAVA_HOME` for the child process;
+6. places that JDK's `bin` first on the child process PATH;
+7. prepends `--settings <path>` when the project uses a settings alias;
+8. starts Maven in the selected project's saved root directory.
+
+The ranking score has a 14-day half-life. Repeatedly used projects rise quickly,
+while the influence of projects that have not been used fades over time. The
+project's full path is shown so projects with the same directory name remain
+unambiguous.
+
+In non-interactive environments such as CI or redirected pipelines, `jup` does
+not prompt. It searches upward for the nearest initialized project and starts
+Maven in the current directory, preserving the existing automation behavior.
 
 Maven's standard input, output, and error streams connect directly to the
 current terminal. Interactive behavior, logs, and exit codes are preserved.
@@ -183,10 +194,10 @@ that it is missing. Bind another alias or run `jup settings unset` to recover.
 jup uninit
 ```
 
-The command removes the nearest initialized project configuration found from
-the current directory. It is idempotent: if no configuration exists, it
-reports that there is nothing to remove. Project files, JDKs, Maven
-installations, and settings files are never modified.
+The command removes the nearest initialized project configuration and its usage
+ranking record. It is idempotent: if no configuration exists, it reports that
+there is nothing to remove. Project files, JDKs, Maven installations, and
+settings files are never modified.
 
 ## Help and version
 
@@ -276,10 +287,12 @@ Directory layout:
 .javaup/
 ├── bin/
 │   └── jup                # jup.exe on Windows
-└── config/
-    ├── projects/          # one JSON document per initialized project
-    └── maven/
-        └── settings.json  # Maven settings alias registry
+├── config/
+│   ├── projects/          # one JSON document per initialized project
+│   └── maven/
+│       └── settings.json  # Maven settings alias registry
+└── state/
+    └── project-usage.json # recent-frequency project ranking
 ```
 
 Set `JAVAUP_HOME` to an absolute path before installing or running `jup` to use

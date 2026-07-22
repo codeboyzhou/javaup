@@ -190,3 +190,46 @@ func TestConfigStoreRejectsOutdatedConfiguration(t *testing.T) {
 		t.Errorf("Load() path/found = %q/%t, want %q/true", gotPath, found, path)
 	}
 }
+
+func TestConfigStoreListsValidProjectsAndReportsStaleEntries(t *testing.T) {
+	t.Parallel()
+
+	baseDir := filepath.Join(t.TempDir(), "projects")
+	store := NewConfigStore(baseDir)
+	validRoot := t.TempDir()
+	valid := Config{SchemaVersion: currentSchemaVersion, ProjectRoot: validRoot}
+	if _, err := store.Save(valid); err != nil {
+		t.Fatalf("Save(valid) error = %v", err)
+	}
+	missingRoot := filepath.Join(t.TempDir(), "missing")
+	if _, err := store.Save(Config{SchemaVersion: currentSchemaVersion, ProjectRoot: missingRoot}); err != nil {
+		t.Fatalf("Save(missing) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(baseDir, "broken.json"), []byte("{"), 0o600); err != nil {
+		t.Fatalf("WriteFile(broken) error = %v", err)
+	}
+
+	configs, warnings, err := store.List()
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(configs) != 1 || !samePath(configs[0].ProjectRoot, validRoot) {
+		t.Errorf("List() configs = %#v, want only %s", configs, validRoot)
+	}
+	if len(warnings) != 2 {
+		t.Errorf("List() warnings = %d, want 2", len(warnings))
+	}
+}
+
+func TestConfigStoreListReturnsEmptyWhenDirectoryDoesNotExist(t *testing.T) {
+	t.Parallel()
+
+	store := NewConfigStore(filepath.Join(t.TempDir(), "missing"))
+	configs, warnings, err := store.List()
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(configs) != 0 || len(warnings) != 0 {
+		t.Errorf("List() configs/warnings = %d/%d, want 0/0", len(configs), len(warnings))
+	}
+}

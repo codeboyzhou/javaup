@@ -12,9 +12,14 @@ type configRemover interface {
 	Delete(projectRoot string) (path string, removed bool, err error)
 }
 
+type usageRemover interface {
+	Delete(ctx context.Context, projectRoot string) error
+}
+
 // Uninitializer removes a project's persisted local configuration.
 type Uninitializer struct {
 	store configRemover
+	usage usageRemover
 }
 
 // NewDefaultUninitializer wires the platform-specific project configuration store.
@@ -23,7 +28,13 @@ func NewDefaultUninitializer() (*Uninitializer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewUninitializer(store), nil
+	usage, err := NewDefaultUsageStore()
+	if err != nil {
+		return nil, err
+	}
+	uninitializer := NewUninitializer(store)
+	uninitializer.usage = usage
+	return uninitializer, nil
 }
 
 // NewUninitializer creates an uninitializer from a replaceable configuration store.
@@ -76,6 +87,12 @@ func (u *Uninitializer) Uninitialize(
 	if err != nil {
 		reportUninitFailure(progress, 2, configStepName, err)
 		return path, false, err
+	}
+	if removed && u.usage != nil {
+		if err := u.usage.Delete(ctx, projectRoot); err != nil {
+			reportUninitFailure(progress, 2, configStepName, err)
+			return path, true, err
+		}
 	}
 	message := path
 	if !removed {
