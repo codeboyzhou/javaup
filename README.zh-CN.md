@@ -31,6 +31,8 @@ $ jup init
 Initialized javaup project.
 
 $ jup run mvn test
+? Select a Maven project
+> myproject  /work/myproject
 [INFO] BUILD SUCCESS
 ```
 
@@ -153,8 +155,13 @@ Java home: /opt/jdks/temurin-17
 Maven settings: default
 ```
 
-`jup run mvn` 会将 Maven 直接连接到当前终端，保留交互输入、日志和退出码，并从
-当前目录而不是强制从项目根目录启动，因此可以正常执行针对子模块的构建。
+在交互式终端中，`jup run mvn` 会列出所有已经初始化的 Maven 项目，不受当前目录
+限制。使用上下方向键和回车选择项目后，Maven 会从该项目保存的根目录启动。最近且
+频繁使用的项目会自动排在前面。Maven 仍会直接连接到当前终端，保留交互输入、日志
+和退出码。
+
+在 CI、输入重定向等非交互环境中，`jup` 保持原有行为：从当前目录向上寻找最近的
+已初始化项目，并直接从当前目录启动 Maven，不显示选择器。
 
 ## 功能亮点
 
@@ -165,6 +172,7 @@ Maven settings: default
 - 为每个项目保存 Maven 可执行文件、JDK 路径、版本和初始化时间。
 - 只在构建子进程中设置 `JAVA_HOME`，并把对应 JDK 的 `bin` 放到 PATH 首位。
 - 支持将可复用的 Maven `settings.xml` 别名绑定到不同项目。
+- 可以从任意目录选择已初始化项目，并按带时间衰减的最近使用频率排序。
 - 可以从项目任意子目录执行 `status`、`run`、`settings use/unset` 和 `uninit`。
 - 支持 Windows、macOS 和 Linux，CI 会在三个平台执行完整验证。
 

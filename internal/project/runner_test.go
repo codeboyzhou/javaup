@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codeboyzhou/javaup/internal/buildtool"
 	"github.com/codeboyzhou/javaup/internal/javainfo"
@@ -30,6 +31,18 @@ func (f *fakeConfigFinder) Find(start string) (Config, string, bool, error) {
 type recordingProcessExecutor struct {
 	spec processSpec
 	err  error
+}
+
+type recordingUsageStore struct {
+	root string
+	at   time.Time
+	err  error
+}
+
+func (s *recordingUsageStore) Touch(_ context.Context, root string, at time.Time) error {
+	s.root = root
+	s.at = at
+	return s.err
 }
 
 func (e *recordingProcessExecutor) Execute(_ context.Context, spec processSpec) error {
@@ -78,6 +91,33 @@ func TestRunnerRunsConfiguredMavenWithProjectJava(t *testing.T) {
 	}
 	if executor.spec.streams != streams {
 		t.Error("process streams were not forwarded")
+	}
+}
+
+func TestRunnerRecordsSelectedProjectBeforeExecution(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	mavenPath := filepath.Join(root, "maven", mavenExecutableName())
+	writeRunnerExecutable(t, mavenPath)
+	usage := &recordingUsageStore{}
+	at := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
+	runner := NewRunner(&fakeConfigFinder{
+		found: true,
+		config: Config{
+			ProjectRoot: root,
+			BuildTool:   buildtool.Info{Type: buildtool.Maven, Version: "3.9.11", Executable: mavenPath},
+			Java:        javainfo.Installation{Version: "21", Home: filepath.Join(root, "jdk")},
+		},
+	}, &recordingProcessExecutor{})
+	runner.usage = usage
+	runner.now = func() time.Time { return at }
+
+	if err := runner.Run(context.Background(), root, buildtool.Maven, []string{"test"}, Streams{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if usage.root != root || !usage.at.Equal(at) {
+		t.Errorf("Touch() root/time = %q/%v, want %q/%v", usage.root, usage.at, root, at)
 	}
 }
 

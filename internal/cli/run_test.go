@@ -20,6 +20,23 @@ type recordingProjectRunner struct {
 	err     error
 }
 
+type recordingProjectPicker struct {
+	root    string
+	tool    buildtool.Type
+	streams project.Streams
+	err     error
+}
+
+func (p *recordingProjectPicker) Pick(
+	_ context.Context,
+	tool buildtool.Type,
+	streams project.Streams,
+) (string, error) {
+	p.tool = tool
+	p.streams = streams
+	return p.root, p.err
+}
+
 func (r *recordingProjectRunner) Run(
 	_ context.Context,
 	root string,
@@ -80,6 +97,46 @@ func TestRunCommandForwardsMavenArguments(t *testing.T) {
 	}
 	if runner.tool != buildtool.Maven || !reflect.DeepEqual(runner.args, []string{"clean", "package", "-DskipTests"}) {
 		t.Errorf("Run() tool/args = %q/%#v", runner.tool, runner.args)
+	}
+}
+
+func TestRunCommandUsesInteractiveProjectSelection(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingProjectRunner{}
+	picker := &recordingProjectPicker{root: "selected-project"}
+	workingDirectoryCalled := false
+	command := newRunCommandWithPicker(
+		func() (projectRunner, error) { return runner, nil },
+		func() (string, error) {
+			workingDirectoryCalled = true
+			return "current-project", nil
+		},
+		func() (projectPicker, error) { return picker, nil },
+		func(io.Reader, io.Writer) bool { return true },
+	)
+	input := bytes.NewBufferString("input")
+	output := &bytes.Buffer{}
+	errors := &bytes.Buffer{}
+	command.SetIn(input)
+	command.SetOut(output)
+	command.SetErr(errors)
+	command.SetArgs([]string{"mvn", "clean", "package"})
+
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("ExecuteContext() error = %v", err)
+	}
+	if workingDirectoryCalled {
+		t.Error("working directory was resolved during interactive selection")
+	}
+	if picker.tool != buildtool.Maven || runner.root != "selected-project" {
+		t.Errorf("picker tool/runner root = %q/%q", picker.tool, runner.root)
+	}
+	if !reflect.DeepEqual(runner.args, []string{"clean", "package"}) {
+		t.Errorf("Run() args = %#v", runner.args)
+	}
+	if picker.streams.Stdin != io.Reader(input) || picker.streams.Stdout != io.Writer(output) || picker.streams.Stderr != io.Writer(errors) {
+		t.Error("picker streams were not forwarded")
 	}
 }
 

@@ -33,6 +33,8 @@ $ jup init
 Initialized javaup project.
 
 $ jup run mvn test
+? Select a Maven project
+> myproject  /work/myproject
 [INFO] BUILD SUCCESS
 ```
 
@@ -56,7 +58,7 @@ With `jup`, each project gets one explicit, inspectable toolchain:
 | Switch projects | Edit `JAVA_HOME` and `PATH` | Use the JDK saved for the project |
 | Select Maven | Depend on whatever is on PATH | Prefer the project Wrapper, otherwise save Maven from PATH |
 | Use private repositories | Repeat `--settings` or replace a global file | Bind a named `settings.xml` to the project |
-| Build from a submodule | Return to the root and reconstruct the environment | Resolve the initialized project from any descendant directory |
+| Build from anywhere | Change directories and reconstruct the environment | Select any initialized project from a ranked list |
 | Preserve the shell | Risk affecting later commands | Change only the spawned build process |
 
 ### How it fits with existing tools
@@ -163,9 +165,15 @@ Java home: /opt/jdks/temurin-17
 Maven settings: default
 ```
 
-`jup run mvn` connects Maven directly to the current terminal, preserving
-interactive input, logs, and exit codes. It starts Maven in the current
-directory, so module-specific builds work as expected.
+In an interactive terminal, `jup run mvn` lists every initialized Maven project
+regardless of the current directory. Use the arrow keys and Enter to select a
+project; Maven starts in that project's saved root directory. Frequently and
+recently used projects rise to the top. Maven remains connected directly to the
+terminal, preserving interactive input, logs, and exit codes.
+
+In non-interactive environments such as CI and redirected pipelines, `jup`
+keeps the previous behavior: it resolves the nearest initialized project from
+the current directory and starts Maven there without prompting.
 
 ## Highlights
 
@@ -179,6 +187,8 @@ directory, so module-specific builds work as expected.
 - Sets `JAVA_HOME` and puts the selected JDK's `bin` first on PATH only for the
   spawned build process.
 - Binds reusable Maven `settings.xml` aliases to individual projects.
+- Selects initialized projects globally and ranks them by decaying recent-use
+  frequency.
 - Resolves `status`, `run`, `settings use/unset`, and `uninit` from any
   descendant directory.
 - Runs on Windows, macOS, and Linux, with CI verification on all three.
