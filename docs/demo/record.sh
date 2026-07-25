@@ -43,8 +43,13 @@ fi
 cd "$repository_root"
 
 if [[ "$skip_build" == false ]]; then
+  commit="$(git rev-parse --verify HEAD)"
   echo "Building the javaup VHS recording image..."
-  docker build --file docs/demo/Dockerfile --tag "$image" .
+  docker build \
+    --build-arg "JAVAUP_COMMIT=${commit}" \
+    --file docs/demo/Dockerfile \
+    --tag "$image" \
+    .
 fi
 
 echo "Recording docs/demo/demo.gif..."

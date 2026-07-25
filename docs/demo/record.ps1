@@ -15,8 +15,18 @@ if ($LASTEXITCODE -ne 0) {
 Push-Location $repositoryRoot
 try {
     if (-not $SkipBuild) {
+        $commit = git rev-parse --verify HEAD
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Failed to determine the Git commit for the demo build.'
+        }
+        $commit = $commit.Trim()
+
         Write-Host 'Building the javaup VHS recording image...'
-        docker build --file docs/demo/Dockerfile --tag $image .
+        docker build `
+            --build-arg "JAVAUP_COMMIT=$commit" `
+            --file docs/demo/Dockerfile `
+            --tag $image `
+            .
         if ($LASTEXITCODE -ne 0) {
             throw 'Failed to build the javaup VHS recording image.'
         }

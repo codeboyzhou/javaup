@@ -39,7 +39,11 @@ To reuse an existing image:
 The equivalent manual commands are:
 
 ```shell
-docker build --file docs/demo/Dockerfile --tag javaup-demo .
+docker build \
+  --build-arg "JAVAUP_COMMIT=$(git rev-parse --verify HEAD)" \
+  --file docs/demo/Dockerfile \
+  --tag javaup-demo \
+  .
 docker run --rm --volume "$PWD:/jup" javaup-demo docs/demo/demo.tape
 ```
 

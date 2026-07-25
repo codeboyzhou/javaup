@@ -4,12 +4,19 @@ ARG GO_VERSION=1.26.5
 
 FROM golang:${GO_VERSION}-bookworm AS jup-builder
 
+ARG JAVAUP_COMMIT
+
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -o /out/jup ./cmd/jup
+RUN test -n "${JAVAUP_COMMIT}" \
+    && CGO_ENABLED=0 go build \
+        -trimpath \
+        -ldflags="-X github.com/codeboyzhou/javaup/internal/buildinfo.Commit=${JAVAUP_COMMIT}" \
+        -o /out/jup \
+        ./cmd/jup
 
 FROM ghcr.io/charmbracelet/vhs:v0.11.0
 
