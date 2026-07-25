@@ -160,8 +160,10 @@ Maven settings: default
 - 为每个项目保存 Maven 可执行文件、JDK 路径、版本和初始化时间。
 - 只在构建子进程中设置 `JAVA_HOME`，并把对应 JDK 的 `bin` 放到 PATH 首位。
 - 支持将可复用的 Maven `settings.xml` 别名绑定到不同项目。
+- 检查 Maven、JDK、POM 和 settings 配置是否失效，并提供可执行的修复建议。
 - 可以从任意目录选择已初始化项目，并按带时间衰减的最近使用频率排序。
-- 可以从项目任意子目录执行 `status`、`run`、`settings use/unset` 和 `uninit`。
+- 可以从项目任意子目录执行 `doctor`、`status`、`run`、`settings use/unset` 和
+  `uninit`。
 - 支持 Windows、macOS 和 Linux，CI 会在三个平台执行完整验证。
 
 ## Maven settings 别名
@@ -185,6 +187,7 @@ jup run mvn clean deploy
 | 命令 | 用途 |
 |---|---|
 | `jup init` | 识别并保存当前项目的 Maven 和 JDK |
+| `jup doctor` | 检查保存的工具链并给出修复建议 |
 | `jup status` | 显示项目保存的工具链 |
 | `jup run mvn <args...>` | 使用保存的工具链运行 Maven |
 | `jup settings add <别名> <文件>` | 添加或更新 settings 别名 |

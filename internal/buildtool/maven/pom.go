@@ -79,6 +79,12 @@ type pomData struct {
 	target     string
 }
 
+// DetectBuildJavaVersion reads the Java version requested by the Maven project
+// rooted at root. An empty version means the POM does not declare one.
+func DetectBuildJavaVersion(root string) (string, error) {
+	return detectBuildJavaVersion(filepath.Join(root, "pom.xml"))
+}
+
 func detectBuildJavaVersion(pomPath string) (string, error) {
 	data, err := loadPOM(pomPath, make(map[string]struct{}), 0)
 	if err != nil {

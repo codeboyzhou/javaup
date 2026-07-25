@@ -69,7 +69,7 @@ func (d *Detector) Detect(ctx context.Context, root string) (buildtool.Detection
 		return buildtool.Detection{}, false, fmt.Errorf("inspect Maven POM: %w", err)
 	}
 
-	javaVersion, err := detectBuildJavaVersion(pomPath)
+	javaVersion, err := DetectBuildJavaVersion(root)
 	if err != nil {
 		return buildtool.Detection{}, true, err
 	}

@@ -27,6 +27,7 @@ func newRootCommand(options Options) *cobra.Command {
 
 	// Register top-level commands here. Command-specific dependencies should be
 	// passed into their constructors instead of accessed through global state.
+	root.AddCommand(newDoctorCommand(defaultDoctorFactory, defaultWorkingDirectory))
 	root.AddCommand(newInitCommand(defaultInitializerFactory, defaultWorkingDirectory))
 	root.AddCommand(newUninitCommand(defaultUninitializerFactory, defaultWorkingDirectory))
 	root.AddCommand(newRunCommand(defaultRunnerFactory, defaultWorkingDirectory))

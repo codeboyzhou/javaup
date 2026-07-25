@@ -105,6 +105,30 @@ Maven settings: default
 The command searches upward for the nearest initialized project, so it works
 from any descendant directory.
 
+## Diagnose the saved toolchain
+
+Run the health checks from the project root or any descendant directory:
+
+```shell
+jup doctor
+```
+
+The command validates all of the following without changing configuration:
+
+- the saved project configuration can be read;
+- `pom.xml` can be parsed and its Java requirement can be resolved;
+- the saved Maven or Maven Wrapper executable still exists and is runnable;
+- the saved JDK contains `javac`, reports a valid version, and matches the POM;
+- a bound Maven settings alias still resolves to a valid `<settings>` file.
+
+Every check is reported as `PASS`, `WARN`, or `FAIL`. A missing Java version in
+the POM is a warning because the saved JDK remains usable. Broken resources are
+failures and include a suggested repair, usually restoring the resource or
+running `jup init` again.
+
+`doctor` exits with status 1 when any check fails, so it can also be used in
+scripts. Warnings do not change the successful exit status.
+
 ## Run Maven
 
 Pass Maven arguments after `jup run mvn`:

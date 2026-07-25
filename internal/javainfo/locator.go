@@ -30,6 +30,21 @@ func NewLocator() *Locator {
 	return &Locator{}
 }
 
+// Inspect validates one JDK home and returns its installed Java version.
+func Inspect(ctx context.Context, home string) (Installation, error) {
+	installation, ok := inspectCandidate(ctx, home)
+	if !ok {
+		return Installation{}, fmt.Errorf("no valid JDK found at %s", filepath.Clean(home))
+	}
+	return installation, nil
+}
+
+// MatchesVersion reports whether an installed Java version satisfies a
+// requested major version. An empty requested version matches any valid JDK.
+func MatchesVersion(version, requested string) bool {
+	return matchesVersion(version, requested)
+}
+
 // Locate returns a JDK matching the requested major version. An empty version
 // selects the first valid JDK, preferring build-tool runtime hints and JAVA_HOME.
 func (l *Locator) Locate(ctx context.Context, version string, preferred ...Installation) (Installation, error) {

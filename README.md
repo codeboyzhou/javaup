@@ -175,9 +175,11 @@ the current directory and starts Maven there without prompting.
 - Sets `JAVA_HOME` and puts the selected JDK's `bin` first on PATH only for the
   spawned build process.
 - Binds reusable Maven `settings.xml` aliases to individual projects.
+- Diagnoses stale Maven, JDK, POM, and settings configuration with actionable
+  repair guidance.
 - Selects initialized projects globally and ranks them by decaying recent-use
   frequency.
-- Resolves `status`, `run`, `settings use/unset`, and `uninit` from any
+- Resolves `doctor`, `status`, `run`, `settings use/unset`, and `uninit` from any
   descendant directory.
 - Runs on Windows, macOS, and Linux, with CI verification on all three.
 
@@ -203,6 +205,7 @@ settings.
 | Command | Purpose |
 |---|---|
 | `jup init` | Detect and save the current project's Maven and JDK |
+| `jup doctor` | Diagnose the saved toolchain and suggest repairs |
 | `jup status` | Show the saved toolchain |
 | `jup run mvn <args...>` | Run Maven with the saved toolchain |
 | `jup settings add <alias> <file>` | Register or update a settings alias |
