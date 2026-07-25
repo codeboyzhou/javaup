@@ -1,0 +1,10 @@
+.git/
+.github/
+.idea/
+.vhs/
+dist/
+target/
+demo.gif
+coverage.out
+.DS_Store
+Thumbs.db

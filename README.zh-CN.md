@@ -20,21 +20,9 @@
 JDK，并记住项目对应的 Maven 可执行文件、JDK 和可选的 `settings.xml`。以后每次
 构建都会复用这套工具链，而且不会修改当前 shell 的 `JAVA_HOME` 或 `PATH`。
 
-```console
-$ cd myproject
-$ jup init
-[1/5] Project OK - /work/myproject
-[2/5] Build Tool OK - Maven 3.9.11 (wrapper)
-[3/5] Java Version OK - Java 8
-[4/5] JDK OK - Java 1.8.0_472 at /opt/jdks/temurin-8
-[5/5] Config OK - /home/alex/.javaup/config/projects/...
-Initialized javaup project.
-
-$ jup run mvn test
-? Select a Maven project
-> myproject  /work/myproject
-[INFO] BUILD SUCCESS
-```
+<p align="center">
+  <img src="docs/demo/demo.gif" alt="demo.gif">
+</p>
 
 > [!IMPORTANT]
 > `jup` 负责选择本机已经安装的工具链，不会下载或卸载 JDK/Maven。v0.2.0 目前

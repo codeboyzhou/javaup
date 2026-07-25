@@ -22,21 +22,9 @@ optional `settings.xml` selection for that project. It recreates the saved
 toolchain whenever you build, without changing `JAVA_HOME` or `PATH` in your
 current shell.
 
-```console
-$ cd myproject
-$ jup init
-[1/5] Project OK - /work/myproject
-[2/5] Build Tool OK - Maven 3.9.11 (wrapper)
-[3/5] Java Version OK - Java 8
-[4/5] JDK OK - Java 1.8.0_472 at /opt/jdks/temurin-8
-[5/5] Config OK - /home/alex/.javaup/config/projects/...
-Initialized javaup project.
-
-$ jup run mvn test
-? Select a Maven project
-> myproject  /work/myproject
-[INFO] BUILD SUCCESS
-```
+<p align="center">
+  <img src="docs/demo/demo.gif" alt="demo.gif">
+</p>
 
 > [!IMPORTANT]
 > `jup` selects toolchains that are already installed. It does not download or

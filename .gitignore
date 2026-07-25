@@ -1,5 +1,12 @@
-/.idea/
-/jup
-/jup.exe
-/dist/
-/coverage.out
+# Go build files
+dist/
+
+# JetBrains files
+.idea/
+target/
+
+# Go coverage file
+coverage.out
+
+# VHS demo.gif generated files
+.vhs/
