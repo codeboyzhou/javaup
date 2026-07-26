@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/codeboyzhou/javaup/internal/apphome"
+	"github.com/codeboyzhou/javaup/internal/atomicfile"
 	"github.com/codeboyzhou/javaup/internal/buildtool"
 	"github.com/gofrs/flock"
 )
@@ -68,31 +69,20 @@ func (s *UsageStore) Touch(ctx context.Context, projectRoot string, at time.Time
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
-		return fmt.Errorf("create project usage directory: %w", err)
-	}
-	lock := flock.New(s.path + ".lock")
-	locked, err := lock.TryLockContext(ctx, 25*time.Millisecond)
-	if err != nil {
-		return fmt.Errorf("lock project usage: %w", err)
-	}
-	if !locked {
-		return fmt.Errorf("lock project usage: canceled")
-	}
-	defer func() { _ = lock.Unlock() }()
-
-	registry, err := s.loadRegistry()
-	if err != nil {
-		return err
-	}
-	key := projectPathIdentity(canonicalRoot)
-	usage := registry.Projects[key]
-	usage.Score = decayedUsageScore(usage, at) + 1
-	usage.ProjectRoot = canonicalRoot
-	usage.LastUsedAt = at.Truncate(time.Second)
-	usage.UseCount++
-	registry.Projects[key] = usage
-	return s.saveRegistry(registry)
+	return s.withLock(ctx, func() error {
+		registry, err := s.loadRegistry()
+		if err != nil {
+			return err
+		}
+		key := projectPathIdentity(canonicalRoot)
+		usage := registry.Projects[key]
+		usage.Score = decayedUsageScore(usage, at) + 1
+		usage.ProjectRoot = canonicalRoot
+		usage.LastUsedAt = at.Truncate(time.Second)
+		usage.UseCount++
+		registry.Projects[key] = usage
+		return s.saveRegistry(registry)
+	})
 }
 
 // Delete removes the usage record for projectRoot.
@@ -101,31 +91,20 @@ func (s *UsageStore) Delete(ctx context.Context, projectRoot string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
-		return fmt.Errorf("create project usage directory: %w", err)
-	}
-	lock := flock.New(s.path + ".lock")
-	locked, err := lock.TryLockContext(ctx, 25*time.Millisecond)
-	if err != nil {
-		return fmt.Errorf("lock project usage: %w", err)
-	}
-	if !locked {
-		return fmt.Errorf("lock project usage: canceled")
-	}
-	defer func() { _ = lock.Unlock() }()
-
-	registry, err := s.loadRegistry()
-	if err != nil {
-		return err
-	}
-	delete(registry.Projects, projectPathIdentity(canonicalRoot))
-	if len(registry.Projects) == 0 {
-		if err := os.Remove(s.path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("remove project usage: %w", err)
+	return s.withLock(ctx, func() error {
+		registry, err := s.loadRegistry()
+		if err != nil {
+			return err
 		}
-		return nil
-	}
-	return s.saveRegistry(registry)
+		delete(registry.Projects, projectPathIdentity(canonicalRoot))
+		if len(registry.Projects) == 0 {
+			if err := os.Remove(s.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("remove project usage: %w", err)
+			}
+			return nil
+		}
+		return s.saveRegistry(registry)
+	})
 }
 
 // Prune removes every usage record whose project identity is not in keep.
@@ -145,44 +124,50 @@ func (s *UsageStore) Prune(ctx context.Context, keep map[string]struct{}, dryRun
 		return removed, nil
 	}
 
+	err = s.withLock(ctx, func() error {
+		registry, err = s.loadRegistry()
+		if err != nil {
+			return err
+		}
+		removed = 0
+		for key := range registry.Projects {
+			if _, exists := keep[key]; exists {
+				continue
+			}
+			delete(registry.Projects, key)
+			removed++
+		}
+		if removed == 0 {
+			return nil
+		}
+		if len(registry.Projects) == 0 {
+			if err := os.Remove(s.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("remove project usage: %w", err)
+			}
+			return nil
+		}
+		return s.saveRegistry(registry)
+	})
+	if err != nil {
+		return 0, err
+	}
+	return removed, nil
+}
+
+func (s *UsageStore) withLock(ctx context.Context, action func() error) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
-		return 0, fmt.Errorf("create project usage directory: %w", err)
+		return fmt.Errorf("create project usage directory: %w", err)
 	}
 	lock := flock.New(s.path + ".lock")
 	locked, err := lock.TryLockContext(ctx, 25*time.Millisecond)
 	if err != nil {
-		return 0, fmt.Errorf("lock project usage: %w", err)
+		return fmt.Errorf("lock project usage: %w", err)
 	}
 	if !locked {
-		return 0, fmt.Errorf("lock project usage: canceled")
+		return fmt.Errorf("lock project usage: canceled")
 	}
 	defer func() { _ = lock.Unlock() }()
-
-	registry, err = s.loadRegistry()
-	if err != nil {
-		return 0, err
-	}
-	removed = 0
-	for key := range registry.Projects {
-		if _, exists := keep[key]; exists {
-			continue
-		}
-		delete(registry.Projects, key)
-		removed++
-	}
-	if removed == 0 {
-		return 0, nil
-	}
-	if len(registry.Projects) == 0 {
-		if err := os.Remove(s.path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return 0, fmt.Errorf("remove project usage: %w", err)
-		}
-		return removed, nil
-	}
-	if err := s.saveRegistry(registry); err != nil {
-		return 0, err
-	}
-	return removed, nil
+	return action()
 }
 
 func (s *UsageStore) loadRegistry() (usageRegistry, error) {
@@ -208,28 +193,7 @@ func (s *UsageStore) loadRegistry() (usageRegistry, error) {
 }
 
 func (s *UsageStore) saveRegistry(registry usageRegistry) error {
-	temporary, err := os.CreateTemp(filepath.Dir(s.path), ".project-usage-*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temporary project usage: %w", err)
-	}
-	temporaryPath := temporary.Name()
-	defer func() { _ = os.Remove(temporaryPath) }()
-
-	encoder := json.NewEncoder(temporary)
-	encoder.SetIndent("", "  ")
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(registry); err != nil {
-		_ = temporary.Close()
-		return fmt.Errorf("encode project usage: %w", err)
-	}
-	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
-		return fmt.Errorf("sync project usage: %w", err)
-	}
-	if err := temporary.Close(); err != nil {
-		return fmt.Errorf("close project usage: %w", err)
-	}
-	if err := os.Rename(temporaryPath, s.path); err != nil {
+	if err := atomicfile.WriteJSON(s.path, ".project-usage-*.tmp", registry); err != nil {
 		return fmt.Errorf("save project usage: %w", err)
 	}
 	return nil

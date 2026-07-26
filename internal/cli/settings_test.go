@@ -41,7 +41,7 @@ func (u *recordingProjectMavenSettingsUser) Use(
 	}, nil
 }
 
-func (s *recordingMavenSettingsStore) Add(alias, path string) (mavensettings.Entry, string, error) {
+func (s *recordingMavenSettingsStore) Add(_ context.Context, alias, path string) (mavensettings.Entry, string, error) {
 	s.alias = alias
 	s.path = path
 	return mavensettings.Entry{Alias: alias, Path: path}, s.registryPath, nil
@@ -51,7 +51,7 @@ func (s *recordingMavenSettingsStore) List() ([]mavensettings.Entry, error) {
 	return append([]mavensettings.Entry(nil), s.entries...), nil
 }
 
-func (s *recordingMavenSettingsStore) Remove(alias string) (mavensettings.Entry, error) {
+func (s *recordingMavenSettingsStore) Remove(_ context.Context, alias string) (mavensettings.Entry, error) {
 	s.removedAlias = alias
 	return s.removedEntry, nil
 }

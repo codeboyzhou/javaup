@@ -2,7 +2,6 @@
 package maven
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/codeboyzhou/javaup/internal/buildtool"
+	"github.com/magiconair/properties"
 )
 
 var (
@@ -145,35 +145,15 @@ func findWrapper(root string) (string, bool) {
 func wrapperMavenVersion(root string) (string, error) {
 	propertiesPath := filepath.Join(root, ".mvn", "wrapper", "maven-wrapper.properties")
 	// #nosec G304 -- the path is a fixed Maven Wrapper location under the detected project root.
-	file, err := os.Open(propertiesPath)
+	config, err := properties.LoadFile(propertiesPath, properties.UTF8)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
 		}
 		return "", fmt.Errorf("read Maven wrapper properties: %w", err)
 	}
-	defer func() { _ = file.Close() }()
-
-	properties := make(map[string]string)
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "!") {
-			continue
-		}
-		key, value, ok := strings.Cut(line, "=")
-		if !ok {
-			key, value, ok = strings.Cut(line, ":")
-		}
-		if ok {
-			properties[strings.TrimSpace(key)] = unescapeProperty(strings.TrimSpace(value))
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("scan Maven wrapper properties: %w", err)
-	}
-
-	distributionURL := strings.ReplaceAll(properties["distributionUrl"], "\\", "/")
+	distributionURL, _ := config.Get("distributionUrl")
+	distributionURL = strings.ReplaceAll(distributionURL, "\\", "/")
 	if match := wrapperPathVersionPattern.FindStringSubmatch(distributionURL); len(match) == 2 {
 		return match[1], nil
 	}
@@ -181,12 +161,6 @@ func wrapperMavenVersion(root string) (string, error) {
 		return match[1], nil
 	}
 	return "", nil
-}
-
-func unescapeProperty(value string) string {
-	value = strings.ReplaceAll(value, `\:`, ":")
-	value = strings.ReplaceAll(value, `\=`, "=")
-	return value
 }
 
 func parseMavenVersionOutput(output []byte) (string, buildtool.JavaRuntime, error) {

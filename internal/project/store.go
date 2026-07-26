@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/codeboyzhou/javaup/internal/apphome"
+	"github.com/codeboyzhou/javaup/internal/atomicfile"
 )
 
 // ConfigStore persists one JSON document per project.
@@ -49,28 +50,7 @@ func (s *ConfigStore) Save(config Config) (string, error) {
 		return "", err
 	}
 	path := filepath.Join(s.baseDir, configFileName(canonicalRoot))
-	temporary, err := os.CreateTemp(s.baseDir, ".project-*.tmp")
-	if err != nil {
-		return "", fmt.Errorf("create temporary project configuration: %w", err)
-	}
-	temporaryPath := temporary.Name()
-	defer func() { _ = os.Remove(temporaryPath) }()
-
-	encoder := json.NewEncoder(temporary)
-	encoder.SetIndent("", "  ")
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(config); err != nil {
-		_ = temporary.Close()
-		return "", fmt.Errorf("encode project configuration: %w", err)
-	}
-	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
-		return "", fmt.Errorf("sync project configuration: %w", err)
-	}
-	if err := temporary.Close(); err != nil {
-		return "", fmt.Errorf("close project configuration: %w", err)
-	}
-	if err := os.Rename(temporaryPath, path); err != nil {
+	if err := atomicfile.WriteJSON(path, ".project-*.tmp", config); err != nil {
 		return "", fmt.Errorf("save project configuration: %w", err)
 	}
 
@@ -106,46 +86,85 @@ func (s *ConfigStore) Load(projectRoot string) (config Config, path string, foun
 // List reads every valid project configuration. Invalid entries are returned as
 // warnings so one stale project does not hide the rest of the catalog.
 func (s *ConfigStore) List() (configs []Config, warnings []error, err error) {
-	entries, err := os.ReadDir(s.baseDir)
+	records, err := scanProjectConfigurations(s.baseDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, record := range records {
+		if record.Status != RegistryAvailable {
+			warnings = append(warnings, record.Err)
+			continue
+		}
+		configs = append(configs, record.Config)
+	}
+	return configs, warnings, nil
+}
+
+type projectConfigurationRecord struct {
+	Config      Config
+	ConfigPath  string
+	Name        string
+	ProjectRoot string
+	Status      RegistryStatus
+	Err         error
+}
+
+func scanProjectConfigurations(baseDir string) ([]projectConfigurationRecord, error) {
+	entries, err := os.ReadDir(baseDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil, nil
+			return nil, nil
 		}
-		return nil, nil, fmt.Errorf("list project configurations: %w", err)
+		return nil, fmt.Errorf("list project configurations: %w", err)
 	}
 
+	records := make([]projectConfigurationRecord, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
-		path := filepath.Join(s.baseDir, entry.Name())
+		path := filepath.Join(baseDir, entry.Name())
+		record := projectConfigurationRecord{
+			ConfigPath: path,
+			Name:       strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name())),
+			Status:     RegistryInvalid,
+		}
 		config, readErr := readProjectConfig(path)
 		if readErr != nil {
-			warnings = append(warnings, readErr)
+			record.Err = readErr
+			records = append(records, record)
 			continue
 		}
-		canonicalRoot, rootErr := canonicalProjectRoot(config.ProjectRoot)
+		record.Config = config
+		root, rootErr := canonicalProjectRoot(config.ProjectRoot)
 		if rootErr != nil {
-			warnings = append(warnings, fmt.Errorf("resolve configured project root in %s: %w", path, rootErr))
+			record.Err = fmt.Errorf("resolve configured project root in %s: %w", path, rootErr)
+			records = append(records, record)
 			continue
 		}
-		if entry.Name() != configFileName(canonicalRoot) {
-			warnings = append(warnings, fmt.Errorf("project configuration filename does not match its root: %s", path))
+		record.ProjectRoot = root
+		record.Name = filepath.Base(root)
+		record.Config.ProjectRoot = root
+		if entry.Name() != configFileName(root) {
+			record.Err = fmt.Errorf("project configuration filename does not match its root: %s", path)
+			records = append(records, record)
 			continue
 		}
-		info, statErr := os.Stat(canonicalRoot)
-		if statErr != nil {
-			warnings = append(warnings, fmt.Errorf("inspect configured project %s: %w", canonicalRoot, statErr))
-			continue
+		info, statErr := os.Stat(root)
+		switch {
+		case errors.Is(statErr, os.ErrNotExist):
+			record.Status = RegistryMissing
+			record.Err = fmt.Errorf("project root does not exist: %s", root)
+		case statErr != nil:
+			record.Err = fmt.Errorf("inspect configured project %s: %w", root, statErr)
+		case !info.IsDir():
+			record.Err = fmt.Errorf("configured project root is not a directory: %s", root)
+		default:
+			record.Status = RegistryAvailable
 		}
-		if !info.IsDir() {
-			warnings = append(warnings, fmt.Errorf("configured project root is not a directory: %s", canonicalRoot))
-			continue
-		}
-		config.ProjectRoot = canonicalRoot
-		configs = append(configs, config)
+		records = append(records, record)
 	}
-	return configs, warnings, nil
+	return records, nil
 }
 
 func readProjectConfig(path string) (Config, error) {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	"github.com/mattn/go-isatty"
 
@@ -21,10 +22,6 @@ type projectCatalog interface {
 }
 
 const selectedProjectTemplate = `{{ "Selected" | green }}: {{ .Name }}  {{ .ProjectRoot }}`
-
-var parsedSelectedProjectTemplate = template.Must(
-	template.New("selected-project").Funcs(promptui.FuncMap).Parse(selectedProjectTemplate),
-)
 
 type terminalProjectPicker struct {
 	catalog projectCatalog
@@ -73,17 +70,12 @@ func (p *terminalProjectPicker) Pick(
 	}
 
 	selector := promptui.Select{
-		Label: "Select a " + tool.DisplayName() + " project",
-		Items: candidates,
-		Size:  min(len(candidates), 10),
-		Templates: &promptui.SelectTemplates{
-			Active:   `> {{ .Name | cyan }}  {{ .ProjectRoot }}`,
-			Inactive: `  {{ .Name }}  {{ .ProjectRoot }}`,
-			Selected: selectedProjectTemplate,
-			Help:     "↑/↓ move • enter select • ctrl+c cancel",
-		},
-		Stdin:  promptInput(streams.Stdin),
-		Stdout: promptOutput(streams.Stdout),
+		Label:     "Select a " + tool.DisplayName() + " project",
+		Items:     candidates,
+		Size:      min(len(candidates), 10),
+		Templates: projectSelectTemplates(streams.Stdout),
+		Stdin:     promptInput(streams.Stdin),
+		Stdout:    promptOutput(streams.Stdout),
 	}
 	index, _, err := selector.Run()
 	if err != nil {
@@ -99,13 +91,42 @@ func writeSelectedProject(output io.Writer, candidate project.Candidate) error {
 	if output == nil {
 		return nil
 	}
-	if err := parsedSelectedProjectTemplate.Execute(output, candidate); err != nil {
+	selected, err := template.New("selected-project").Funcs(projectPromptFuncMap(output)).Parse(selectedProjectTemplate)
+	if err != nil {
+		return fmt.Errorf("prepare selected project output: %w", err)
+	}
+	if err := selected.Execute(output, candidate); err != nil {
 		return fmt.Errorf("show selected project: %w", err)
 	}
 	if _, err := fmt.Fprintln(output); err != nil {
 		return fmt.Errorf("show selected project: %w", err)
 	}
 	return nil
+}
+
+func projectSelectTemplates(output io.Writer) *promptui.SelectTemplates {
+	return &promptui.SelectTemplates{
+		Active:   `> {{ .Name | cyan }}  {{ .ProjectRoot }}`,
+		Inactive: `  {{ .Name }}  {{ .ProjectRoot }}`,
+		Selected: selectedProjectTemplate,
+		Help:     "↑/↓ move • enter select • ctrl+c cancel",
+		FuncMap:  projectPromptFuncMap(output),
+	}
+}
+
+func projectPromptFuncMap(output io.Writer) template.FuncMap {
+	functions := make(template.FuncMap, len(promptui.FuncMap))
+	for name, function := range promptui.FuncMap {
+		functions[name] = function
+	}
+	for name, attribute := range map[string]color.Attribute{
+		"cyan":  color.FgCyan,
+		"green": color.FgGreen,
+	} {
+		style := newOutputStyle(output, attribute)
+		functions[name] = func(value any) string { return style.Sprint(value) }
+	}
+	return functions
 }
 
 func filterProjectCandidates(candidates []project.Candidate, keyword string) []project.Candidate {

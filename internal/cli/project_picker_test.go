@@ -127,7 +127,7 @@ func TestTerminalProjectPickerShowsAutomaticallySelectedProject(t *testing.T) {
 	if root != `C:\Users\home\code\mcp-java-sdk-examples` {
 		t.Errorf("Pick() root = %q", root)
 	}
-	want := "\x1b[32mSelected\x1b[0m: mcp-java-sdk-examples  C:\\Users\\home\\code\\mcp-java-sdk-examples\n"
+	want := "Selected: mcp-java-sdk-examples  C:\\Users\\home\\code\\mcp-java-sdk-examples\n"
 	if output.String() != want {
 		t.Errorf("Pick() output = %q, want %q", output.String(), want)
 	}

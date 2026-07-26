@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/codeboyzhou/javaup/internal/javaversion"
 )
 
 const maxParentDepth = 16
@@ -228,14 +230,5 @@ func resolveProperties(value string, properties map[string]string) string {
 }
 
 func normalizeJavaVersion(value string) (string, error) {
-	value = strings.TrimSpace(value)
-	value = strings.TrimPrefix(value, "1.")
-	end := 0
-	for end < len(value) && value[end] >= '0' && value[end] <= '9' {
-		end++
-	}
-	if end == 0 {
-		return "", fmt.Errorf("unsupported version syntax")
-	}
-	return value[:end], nil
+	return javaversion.Major(value)
 }

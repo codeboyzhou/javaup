@@ -3,19 +3,13 @@ package uninstall
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
-	"strings"
-	"syscall"
+
+	"github.com/codeboyzhou/javaup/internal/winprocess"
 )
 
 func applyUninstall(spec plan) (bool, error) {
-	script, err := os.CreateTemp("", ".javaup-uninstall-*.ps1")
-	if err != nil {
-		return false, fmt.Errorf("create uninstall helper: %w", err)
-	}
-	scriptPath := script.Name()
-	contents := strings.ReplaceAll(`param(
+	contents := `param(
   [int]$ParentPid,
   [string]$Target,
   [string]$BinDir,
@@ -90,40 +84,27 @@ namespace JavaupUninstall {
 } finally {
   Remove-Item -LiteralPath $ScriptPath -Force -ErrorAction SilentlyContinue
 }
-`, "\n", "\r\n")
-	if _, err := script.WriteString(contents); err != nil {
-		_ = script.Close()
-		_ = os.Remove(scriptPath)
-		return false, fmt.Errorf("write uninstall helper: %w", err)
-	}
-	if err := script.Close(); err != nil {
-		_ = os.Remove(scriptPath)
-		return false, fmt.Errorf("close uninstall helper: %w", err)
-	}
-
-	arguments := []string{
-		"-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-		"-File", scriptPath,
-		"-ParentPid", strconv.Itoa(os.Getpid()),
-		"-Target", spec.Target,
-		"-BinDir", spec.BinDir,
-		"-HomeDir", spec.Home,
-		"-ScriptPath", scriptPath,
-	}
-	if spec.Purge {
-		arguments = append(arguments, "-Purge")
-	}
-	// #nosec G204 -- arguments are validated local paths passed as distinct values.
-	command := exec.Command("powershell.exe", arguments...)
-	command.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP | 0x08000000,
-	}
-	if err := command.Start(); err != nil {
-		_ = os.Remove(scriptPath)
+`
+	err := winprocess.StartPowerShellHelper(
+		"",
+		".javaup-uninstall-*.ps1",
+		contents,
+		func(scriptPath string) []string {
+			arguments := []string{
+				"-ParentPid", strconv.Itoa(os.Getpid()),
+				"-Target", spec.Target,
+				"-BinDir", spec.BinDir,
+				"-HomeDir", spec.Home,
+				"-ScriptPath", scriptPath,
+			}
+			if spec.Purge {
+				arguments = append(arguments, "-Purge")
+			}
+			return arguments
+		},
+	)
+	if err != nil {
 		return false, fmt.Errorf("start uninstall helper: %w", err)
-	}
-	if err := command.Process.Release(); err != nil {
-		return false, fmt.Errorf("detach uninstall helper: %w", err)
 	}
 	return true, nil
 }

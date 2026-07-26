@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -22,26 +21,16 @@ func newInitCommand(factory initializerFactory, workingDirectory func() (string,
 		Short: "Detect and initialize the current Java project",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			root, err := workingDirectory()
-			if err != nil {
-				return fmt.Errorf("resolve current directory: %w", err)
-			}
-			initializer, err := factory()
-			if err != nil {
-				return err
-			}
-
-			progress := newProgressRenderer(command.OutOrStdout())
-			_, _, err = initializer.Initialize(command.Context(), root, progress.Report)
-			if progress.Err() != nil {
-				return progress.Err()
-			}
-			if err != nil {
-				return err
-			}
-
-			_, err = fmt.Fprintln(command.OutOrStdout(), progress.Success("Initialized javaup project."))
-			return err
+			return runProjectProgressCommand(command, workingDirectory, func() (projectProgressAction, error) {
+				initializer, err := factory()
+				if err != nil {
+					return nil, err
+				}
+				return func(ctx context.Context, root string, progress project.ProgressFunc) error {
+					_, _, err := initializer.Initialize(ctx, root, progress)
+					return err
+				}, nil
+			}, "Initialized javaup project.")
 		},
 	}
 }

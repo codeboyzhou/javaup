@@ -140,31 +140,8 @@ func TestDoctorReportsActionableBrokenResources(t *testing.T) {
 func TestDoctorWarnsWhenPOMHasNoJavaRequirement(t *testing.T) {
 	t.Parallel()
 
-	root := t.TempDir()
-	writeDoctorFile(t, filepath.Join(root, "pom.xml"), `
-<project><modelVersion>4.0.0</modelVersion></project>`, 0o600)
-	executable := filepath.Join(root, "mvn")
-	writeDoctorFile(t, executable, "#!/bin/sh\n", 0o755)
-	doctor := NewDoctor(&doctorConfigFinder{
-		found: true,
-		config: Config{
-			ProjectRoot: root,
-			BuildTool: buildtool.Info{
-				Type:       buildtool.Maven,
-				Version:    "3.9.11",
-				Executable: executable,
-			},
-			Java: javainfo.Installation{Version: "21.0.8", Home: filepath.Join(root, "jdk-21")},
-		},
-	}, &doctorSettingsResolver{})
-	doctor.inspectJDK = func(context.Context, string) (javainfo.Installation, error) {
-		return javainfo.Installation{Version: "21.0.8", Home: filepath.Join(root, "jdk-21")}, nil
-	}
-
-	report, err := doctor.Diagnose(context.Background(), root)
-	if err != nil {
-		t.Fatalf("Diagnose() error = %v", err)
-	}
+	report := diagnoseDoctorProject(t, `
+<project><modelVersion>4.0.0</modelVersion></project>`, "21.0.8", "21.0.8")
 	if report.Failed() != 0 || report.Warnings() != 1 {
 		t.Fatalf("failed/warnings = %d/%d, want 0/1", report.Failed(), report.Warnings())
 	}
@@ -214,14 +191,24 @@ func TestDoctorReportsUnreadableConfiguration(t *testing.T) {
 func TestDoctorWarnsWhenJDKVersionChangedInPlace(t *testing.T) {
 	t.Parallel()
 
-	root := t.TempDir()
-	writeDoctorFile(t, filepath.Join(root, "pom.xml"), `
+	report := diagnoseDoctorProject(t, `
 <project>
   <modelVersion>4.0.0</modelVersion>
   <properties><maven.compiler.release>17</maven.compiler.release></properties>
-</project>`, 0o600)
+</project>`, "17.0.12", "17.0.13")
+	if report.Failed() != 0 || report.Warnings() != 1 {
+		t.Fatalf("failed/warnings = %d/%d, want 0/1", report.Failed(), report.Warnings())
+	}
+	assertDoctorCheck(t, report, "JDK", CheckWarning, "saved version was 17.0.12")
+}
+
+func diagnoseDoctorProject(t *testing.T, pom, savedVersion, inspectedVersion string) DoctorReport {
+	t.Helper()
+	root := t.TempDir()
+	writeDoctorFile(t, filepath.Join(root, "pom.xml"), pom, 0o600)
 	executable := filepath.Join(root, "mvn")
 	writeDoctorFile(t, executable, "#!/bin/sh\n", 0o755)
+	javaHome := filepath.Join(root, "jdk-"+strings.SplitN(savedVersion, ".", 2)[0])
 	doctor := NewDoctor(&doctorConfigFinder{
 		found: true,
 		config: Config{
@@ -231,21 +218,18 @@ func TestDoctorWarnsWhenJDKVersionChangedInPlace(t *testing.T) {
 				Version:    "3.9.11",
 				Executable: executable,
 			},
-			Java: javainfo.Installation{Version: "17.0.12", Home: filepath.Join(root, "jdk-17")},
+			Java: javainfo.Installation{Version: savedVersion, Home: javaHome},
 		},
 	}, &doctorSettingsResolver{})
 	doctor.inspectJDK = func(context.Context, string) (javainfo.Installation, error) {
-		return javainfo.Installation{Version: "17.0.13", Home: filepath.Join(root, "jdk-17")}, nil
+		return javainfo.Installation{Version: inspectedVersion, Home: javaHome}, nil
 	}
 
 	report, err := doctor.Diagnose(context.Background(), root)
 	if err != nil {
 		t.Fatalf("Diagnose() error = %v", err)
 	}
-	if report.Failed() != 0 || report.Warnings() != 1 {
-		t.Fatalf("failed/warnings = %d/%d, want 0/1", report.Failed(), report.Warnings())
-	}
-	assertDoctorCheck(t, report, "JDK", CheckWarning, "saved version was 17.0.12")
+	return report
 }
 
 func assertDoctorCheck(

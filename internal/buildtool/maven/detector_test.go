@@ -54,6 +54,28 @@ func TestDetectorDetectsMavenWrapper(t *testing.T) {
 	}
 }
 
+func TestDetectorReadsStandardPropertiesSyntax(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "pom.xml"), `<project/>`)
+	writeTestFile(t, filepath.Join(root, "mvnw"), "#!/bin/sh\n")
+	writeTestFile(
+		t,
+		filepath.Join(root, ".mvn", "wrapper", "maven-wrapper.properties"),
+		"distributionUrl https\\://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.11/\\\n  apache-maven-3.9.11-bin.zip\n",
+	)
+
+	detector := &Detector{runner: &fakeRunner{}}
+	detection, found, err := detector.Detect(context.Background(), root)
+	if err != nil {
+		t.Fatalf("Detect() error = %v", err)
+	}
+	if !found || detection.Tool.Version != "3.9.11" {
+		t.Errorf("Detect() found/version = %t/%q, want true/3.9.11", found, detection.Tool.Version)
+	}
+}
+
 func TestDetectorUsesInstalledMaven(t *testing.T) {
 	t.Parallel()
 

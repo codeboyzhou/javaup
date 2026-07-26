@@ -2,6 +2,7 @@
 package mavensettings
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -10,9 +11,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/codeboyzhou/javaup/internal/apphome"
+	"github.com/codeboyzhou/javaup/internal/atomicfile"
+	"github.com/gofrs/flock"
 )
 
 const currentSchemaVersion = 1
@@ -48,7 +52,7 @@ func NewStore(path string) *Store {
 }
 
 // Add saves alias as a reference to settingsPath. Existing aliases are updated.
-func (s *Store) Add(alias, settingsPath string) (Entry, string, error) {
+func (s *Store) Add(ctx context.Context, alias, settingsPath string) (Entry, string, error) {
 	alias, err := validateAlias(alias)
 	if err != nil {
 		return Entry{}, s.path, err
@@ -58,12 +62,10 @@ func (s *Store) Add(alias, settingsPath string) (Entry, string, error) {
 		return Entry{}, s.path, err
 	}
 
-	config, err := s.load()
-	if err != nil {
-		return Entry{}, s.path, err
-	}
-	config.Aliases[alias] = settingsPath
-	if err := s.save(config); err != nil {
+	if err := s.mutate(ctx, func(config *registry) error {
+		config.Aliases[alias] = settingsPath
+		return nil
+	}); err != nil {
 		return Entry{}, s.path, err
 	}
 
@@ -108,25 +110,49 @@ func (s *Store) List() ([]Entry, error) {
 }
 
 // Remove deletes the saved Maven settings alias and returns its former mapping.
-func (s *Store) Remove(alias string) (Entry, error) {
+func (s *Store) Remove(ctx context.Context, alias string) (Entry, error) {
 	alias, err := validateAlias(alias)
 	if err != nil {
 		return Entry{}, err
 	}
-	config, err := s.load()
-	if err != nil {
-		return Entry{}, err
-	}
-	settingsPath, found := config.Aliases[alias]
-	if !found {
-		return Entry{}, fmt.Errorf("maven settings alias %q is not configured", alias)
-	}
-
-	delete(config.Aliases, alias)
-	if err := s.save(config); err != nil {
+	var settingsPath string
+	if err := s.mutate(ctx, func(config *registry) error {
+		var found bool
+		settingsPath, found = config.Aliases[alias]
+		if !found {
+			return fmt.Errorf("maven settings alias %q is not configured", alias)
+		}
+		delete(config.Aliases, alias)
+		return nil
+	}); err != nil {
 		return Entry{}, err
 	}
 	return Entry{Alias: alias, Path: settingsPath}, nil
+}
+
+func (s *Store) mutate(ctx context.Context, change func(*registry) error) error {
+	directory := filepath.Dir(s.path)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return fmt.Errorf("create Maven settings configuration directory: %w", err)
+	}
+	lock := flock.New(s.path + ".lock")
+	locked, err := lock.TryLockContext(ctx, 25*time.Millisecond)
+	if err != nil {
+		return fmt.Errorf("lock Maven settings aliases: %w", err)
+	}
+	if !locked {
+		return fmt.Errorf("lock Maven settings aliases: canceled")
+	}
+	defer func() { _ = lock.Unlock() }()
+
+	config, err := s.load()
+	if err != nil {
+		return err
+	}
+	if err := change(&config); err != nil {
+		return err
+	}
+	return s.save(config)
 }
 
 func (s *Store) load() (registry, error) {
@@ -160,28 +186,7 @@ func (s *Store) save(config registry) error {
 		return fmt.Errorf("create Maven settings configuration directory: %w", err)
 	}
 
-	temporary, err := os.CreateTemp(directory, ".settings-*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temporary Maven settings configuration: %w", err)
-	}
-	temporaryPath := temporary.Name()
-	defer func() { _ = os.Remove(temporaryPath) }()
-
-	encoder := json.NewEncoder(temporary)
-	encoder.SetIndent("", "  ")
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(config); err != nil {
-		_ = temporary.Close()
-		return fmt.Errorf("encode Maven settings aliases: %w", err)
-	}
-	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
-		return fmt.Errorf("sync Maven settings aliases: %w", err)
-	}
-	if err := temporary.Close(); err != nil {
-		return fmt.Errorf("close Maven settings aliases: %w", err)
-	}
-	if err := os.Rename(temporaryPath, s.path); err != nil {
+	if err := atomicfile.WriteJSON(s.path, ".settings-*.tmp", config); err != nil {
 		return fmt.Errorf("save Maven settings aliases: %w", err)
 	}
 	return nil

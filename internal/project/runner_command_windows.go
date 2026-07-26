@@ -4,12 +4,11 @@ package project
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
+
+	"github.com/codeboyzhou/javaup/internal/winprocess"
 )
 
 func platformRunCommand(ctx context.Context, executable string, args []string) *exec.Cmd {
@@ -19,23 +18,5 @@ func platformRunCommand(ctx context.Context, executable string, args []string) *
 		return exec.CommandContext(ctx, executable, args...)
 	}
 
-	commandInterpreter := os.Getenv("ComSpec")
-	if commandInterpreter == "" {
-		commandInterpreter = "cmd.exe"
-	}
-	arguments := make([]string, 0, len(args)+1)
-	arguments = append(arguments, quoteBatchArgument(executable))
-	for _, argument := range args {
-		arguments = append(arguments, quoteBatchArgument(argument))
-	}
-	// #nosec G204,G702 -- cmd.exe is required to launch the configured Maven batch script.
-	command := exec.CommandContext(ctx, commandInterpreter)
-	command.SysProcAttr = &syscall.SysProcAttr{
-		CmdLine: fmt.Sprintf(`/d /s /c "%s"`, strings.Join(arguments, " ")),
-	}
-	return command
-}
-
-func quoteBatchArgument(value string) string {
-	return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
+	return winprocess.BatchCommand(ctx, executable, args...)
 }

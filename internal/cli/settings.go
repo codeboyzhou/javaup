@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -15,9 +16,9 @@ import (
 )
 
 type mavenSettingsStore interface {
-	Add(alias, path string) (entry mavensettings.Entry, registryPath string, err error)
+	Add(ctx context.Context, alias, path string) (entry mavensettings.Entry, registryPath string, err error)
 	List() ([]mavensettings.Entry, error)
-	Remove(alias string) (mavensettings.Entry, error)
+	Remove(ctx context.Context, alias string) (mavensettings.Entry, error)
 }
 
 type mavenSettingsFactory func() (mavenSettingsStore, error)
@@ -144,7 +145,7 @@ func newSettingsAddCommand(factory mavenSettingsFactory) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			entry, registryPath, err := store.Add(args[0], args[1])
+			entry, registryPath, err := store.Add(command.Context(), args[0], args[1])
 			if err != nil {
 				return err
 			}
@@ -172,7 +173,7 @@ func newSettingsRemoveCommand(factory mavenSettingsFactory) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			entry, err := store.Remove(args[0])
+			entry, err := store.Remove(command.Context(), args[0])
 			if err != nil {
 				return err
 			}

@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
+
+	"github.com/codeboyzhou/javaup/internal/atomicfile"
 )
 
 const installerProfileHeader = "# Added by the javaup installer"
@@ -68,30 +69,8 @@ func replaceFile(path string, contents []byte) error {
 	if err != nil {
 		return err
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".javaup-profile-*")
-	if err != nil {
-		return fmt.Errorf("create temporary shell profile: %w", err)
-	}
-	temporaryPath := temporary.Name()
-	clean := true
-	defer func() {
-		_ = temporary.Close()
-		if clean {
-			_ = os.Remove(temporaryPath)
-		}
-	}()
-	if err := temporary.Chmod(info.Mode().Perm()); err != nil {
-		return fmt.Errorf("preserve shell profile permissions: %w", err)
-	}
-	if _, err := temporary.Write(contents); err != nil {
-		return fmt.Errorf("write shell profile: %w", err)
-	}
-	if err := temporary.Close(); err != nil {
-		return fmt.Errorf("close shell profile: %w", err)
-	}
-	if err := os.Rename(temporaryPath, path); err != nil {
+	if err := atomicfile.WriteBytes(path, ".javaup-profile-*", contents, info.Mode().Perm()); err != nil {
 		return fmt.Errorf("replace shell profile: %w", err)
 	}
-	clean = false
 	return nil
 }

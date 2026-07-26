@@ -5,10 +5,12 @@ go 1.26.5
 require (
 	github.com/fatih/color v1.19.0
 	github.com/gofrs/flock v0.13.0
+	github.com/magiconair/properties v1.8.10
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mattn/go-isatty v0.0.23
 	github.com/olekukonko/tablewriter v1.1.4
 	github.com/spf13/cobra v1.10.2
+	golang.org/x/mod v0.38.0
 )
 
 require (

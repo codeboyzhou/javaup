@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/spf13/cobra"
 
 	"github.com/fatih/color"
 
@@ -65,4 +68,33 @@ func (r *progressRenderer) Success(message string) string {
 
 func (r *progressRenderer) Err() error {
 	return r.err
+}
+
+type projectProgressAction func(context.Context, string, project.ProgressFunc) error
+type projectProgressActionFactory func() (projectProgressAction, error)
+
+func runProjectProgressCommand(
+	command *cobra.Command,
+	workingDirectory func() (string, error),
+	factory projectProgressActionFactory,
+	successMessage string,
+) error {
+	root, err := workingDirectory()
+	if err != nil {
+		return fmt.Errorf("resolve current directory: %w", err)
+	}
+	action, err := factory()
+	if err != nil {
+		return err
+	}
+	progress := newProgressRenderer(command.OutOrStdout())
+	err = action(command.Context(), root, progress.Report)
+	if progress.Err() != nil {
+		return progress.Err()
+	}
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(command.OutOrStdout(), progress.Success(successMessage))
+	return err
 }

@@ -1,6 +1,7 @@
 package project
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -144,7 +145,7 @@ func TestMavenSettingsManagerPersistsAliasInProjectStore(t *testing.T) {
 	if err := os.WriteFile(settingsPath, []byte(`<settings/>`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	if _, _, err := aliases.Add("intranet", settingsPath); err != nil {
+	if _, _, err := aliases.Add(context.Background(), "intranet", settingsPath); err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
 	if _, err := projects.Save(Config{

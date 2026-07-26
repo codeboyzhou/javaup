@@ -173,59 +173,22 @@ func (m *Registry) Prune(ctx context.Context, dryRun bool) (PruneResult, error) 
 }
 
 func (m *Registry) scan() ([]RegistryEntry, error) {
-	directoryEntries, err := os.ReadDir(m.configs.baseDir)
+	records, err := scanProjectConfigurations(m.configs.baseDir)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("list project configurations: %w", err)
+		return nil, err
 	}
-
-	entries := make([]RegistryEntry, 0, len(directoryEntries))
-	for _, directoryEntry := range directoryEntries {
-		if directoryEntry.IsDir() || filepath.Ext(directoryEntry.Name()) != ".json" {
-			continue
-		}
-		configPath := filepath.Join(m.configs.baseDir, directoryEntry.Name())
+	entries := make([]RegistryEntry, 0, len(records))
+	for _, record := range records {
 		entry := RegistryEntry{
-			Name:       strings.TrimSuffix(directoryEntry.Name(), filepath.Ext(directoryEntry.Name())),
-			ConfigPath: configPath,
-			Status:     RegistryInvalid,
+			Name:        record.Name,
+			ProjectRoot: record.ProjectRoot,
+			ConfigPath:  record.ConfigPath,
+			BuildTool:   record.Config.BuildTool.Type,
+			JavaVersion: record.Config.Java.Version,
+			Status:      record.Status,
 		}
-		config, readErr := readProjectConfig(configPath)
-		if readErr != nil {
-			entry.Detail = readErr.Error()
-			entries = append(entries, entry)
-			continue
-		}
-
-		entry.BuildTool = config.BuildTool.Type
-		entry.JavaVersion = config.Java.Version
-		root, rootErr := canonicalProjectRoot(config.ProjectRoot)
-		if rootErr != nil {
-			entry.Detail = fmt.Sprintf("resolve configured project root: %v", rootErr)
-			entries = append(entries, entry)
-			continue
-		}
-		entry.ProjectRoot = root
-		entry.Name = filepath.Base(root)
-		if directoryEntry.Name() != configFileName(root) {
-			entry.Detail = "project configuration filename does not match its root"
-			entries = append(entries, entry)
-			continue
-		}
-
-		info, statErr := os.Stat(root)
-		switch {
-		case errors.Is(statErr, os.ErrNotExist):
-			entry.Status = RegistryMissing
-			entry.Detail = "project root does not exist"
-		case statErr != nil:
-			entry.Detail = fmt.Sprintf("inspect project root: %v", statErr)
-		case !info.IsDir():
-			entry.Detail = "project root is not a directory"
-		default:
-			entry.Status = RegistryAvailable
+		if record.Err != nil {
+			entry.Detail = record.Err.Error()
 		}
 		entries = append(entries, entry)
 	}

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/spf13/cobra"
 
@@ -21,26 +20,16 @@ func newUninitCommand(factory uninitializerFactory, workingDirectory func() (str
 		Short: "Remove javaup configuration for the current project",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
-			root, err := workingDirectory()
-			if err != nil {
-				return fmt.Errorf("resolve current directory: %w", err)
-			}
-			uninitializer, err := factory()
-			if err != nil {
-				return err
-			}
-
-			progress := newProgressRenderer(command.OutOrStdout())
-			_, _, err = uninitializer.Uninitialize(command.Context(), root, progress.Report)
-			if progress.Err() != nil {
-				return progress.Err()
-			}
-			if err != nil {
-				return err
-			}
-
-			_, err = fmt.Fprintln(command.OutOrStdout(), progress.Success("Uninitialized javaup project."))
-			return err
+			return runProjectProgressCommand(command, workingDirectory, func() (projectProgressAction, error) {
+				uninitializer, err := factory()
+				if err != nil {
+					return nil, err
+				}
+				return func(ctx context.Context, root string, progress project.ProgressFunc) error {
+					_, _, err := uninitializer.Uninitialize(ctx, root, progress)
+					return err
+				}, nil
+			}, "Uninitialized javaup project.")
 		},
 	}
 }

@@ -1,10 +1,13 @@
 package mavensettings
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -19,7 +22,7 @@ func TestStoreAddsAndUpdatesAliases(t *testing.T) {
 	wantSecondPath := canonicalSettingsPath(t, secondPath)
 	store := NewStore(registryPath)
 
-	entry, savedPath, err := store.Add("intranet", firstPath)
+	entry, savedPath, err := store.Add(context.Background(), "intranet", firstPath)
 	if err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
@@ -30,10 +33,10 @@ func TestStoreAddsAndUpdatesAliases(t *testing.T) {
 		t.Errorf("Add() registry path = %q, want %q", savedPath, registryPath)
 	}
 
-	if _, _, err := store.Add("google", secondPath); err != nil {
+	if _, _, err := store.Add(context.Background(), "google", secondPath); err != nil {
 		t.Fatalf("Add() second alias error = %v", err)
 	}
-	if _, _, err := store.Add("intranet", secondPath); err != nil {
+	if _, _, err := store.Add(context.Background(), "intranet", secondPath); err != nil {
 		t.Fatalf("Add() update alias error = %v", err)
 	}
 
@@ -108,17 +111,17 @@ func TestStoreRemovesAlias(t *testing.T) {
 	wantSettingsPath := canonicalSettingsPath(t, settingsPath)
 	wantGooglePath := canonicalSettingsPath(t, googlePath)
 	store := NewStore(filepath.Join(root, "config", "settings.json"))
-	if _, _, err := store.Add("intranet", settingsPath); err != nil {
+	if _, _, err := store.Add(context.Background(), "intranet", settingsPath); err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
-	if _, _, err := store.Add("google", googlePath); err != nil {
+	if _, _, err := store.Add(context.Background(), "google", googlePath); err != nil {
 		t.Fatalf("Add() second alias error = %v", err)
 	}
 	if err := os.Remove(settingsPath); err != nil {
 		t.Fatalf("Remove settings file error = %v", err)
 	}
 
-	entry, err := store.Remove("intranet")
+	entry, err := store.Remove(context.Background(), "intranet")
 	if err != nil {
 		t.Fatalf("Remove() error = %v", err)
 	}
@@ -132,7 +135,7 @@ func TestStoreRemovesAlias(t *testing.T) {
 	if len(entries) != 1 || entries[0].Alias != "google" || entries[0].Path != wantGooglePath {
 		t.Errorf("List() entries = %#v, want only google mapping", entries)
 	}
-	if _, err := store.Remove("intranet"); err == nil || !strings.Contains(err.Error(), "not configured") {
+	if _, err := store.Remove(context.Background(), "intranet"); err == nil || !strings.Contains(err.Error(), "not configured") {
 		t.Errorf("Remove() missing error = %v, want not configured", err)
 	}
 }
@@ -141,7 +144,7 @@ func TestStoreRejectsInvalidAlias(t *testing.T) {
 	t.Parallel()
 
 	settingsPath := writeSettingsFile(t, filepath.Join(t.TempDir(), "settings.xml"))
-	_, _, err := NewStore(filepath.Join(t.TempDir(), "settings.json")).Add("invalid alias", settingsPath)
+	_, _, err := NewStore(filepath.Join(t.TempDir(), "settings.json")).Add(context.Background(), "invalid alias", settingsPath)
 	if err == nil || !strings.Contains(err.Error(), "must contain only") {
 		t.Fatalf("Add() error = %v, want invalid alias error", err)
 	}
@@ -155,9 +158,42 @@ func TestStoreRejectsInvalidMavenSettingsFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`<project/>`), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	_, _, err := NewStore(filepath.Join(root, "settings.json")).Add("invalid", path)
+	_, _, err := NewStore(filepath.Join(root, "settings.json")).Add(context.Background(), "invalid", path)
 	if err == nil || !strings.Contains(err.Error(), `root element "project"`) {
 		t.Fatalf("Add() error = %v, want invalid root element error", err)
+	}
+}
+
+func TestStorePreservesConcurrentAliasUpdates(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	settingsPath := writeSettingsFile(t, filepath.Join(root, "settings.xml"))
+	store := NewStore(filepath.Join(root, "config", "settings.json"))
+	const aliases = 20
+	errors := make(chan error, aliases)
+	var group sync.WaitGroup
+	for index := range aliases {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			_, _, err := store.Add(context.Background(), "alias-"+strconv.Itoa(index), settingsPath)
+			errors <- err
+		}()
+	}
+	group.Wait()
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Fatalf("Add() error = %v", err)
+		}
+	}
+	entries, err := store.List()
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(entries) != aliases {
+		t.Errorf("List() entries = %d, want %d", len(entries), aliases)
 	}
 }
 

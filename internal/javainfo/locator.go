@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+
+	"github.com/codeboyzhou/javaup/internal/javaversion"
 )
 
 var javaHomeVariablePattern = regexp.MustCompile(`(?i)^(?:JAVA_HOME|JDK_HOME|JAVA\d+_HOME|JAVA_HOME_\d+|JAVA_\d+_HOME|JDK\d+_HOME|JDK_HOME_\d+)$`)
@@ -341,19 +343,7 @@ func matchesVersion(version, requested string) bool {
 }
 
 func normalizeVersion(value string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", nil
-	}
-	value = strings.TrimPrefix(value, "1.")
-	end := 0
-	for end < len(value) && value[end] >= '0' && value[end] <= '9' {
-		end++
-	}
-	if end == 0 {
-		return "", fmt.Errorf("unsupported Java version %q", value)
-	}
-	return value[:end], nil
+	return javaversion.OptionalMajor(value)
 }
 
 func javacExecutable() string {

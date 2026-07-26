@@ -17,9 +17,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/mod/semver"
 )
 
 const (
@@ -197,42 +198,20 @@ func (u *Updater) download(ctx context.Context, url string, limit int64) ([]byte
 }
 
 type version struct {
-	tag   string
-	parts [3]uint64
+	tag string
 }
 
 func parseVersion(value string) (version, error) {
-	if len(value) < 2 || value[0] != 'v' {
+	if !semver.IsValid(value) || semver.Canonical(value) != value ||
+		semver.Prerelease(value) != "" || semver.Build(value) != "" ||
+		strings.Count(value, ".") != 2 {
 		return version{}, fmt.Errorf("invalid semantic version %q", value)
 	}
-	fields := strings.Split(value[1:], ".")
-	if len(fields) != 3 {
-		return version{}, fmt.Errorf("invalid semantic version %q", value)
-	}
-	parsed := version{tag: value}
-	for index, field := range fields {
-		if field == "" || (len(field) > 1 && field[0] == '0') {
-			return version{}, fmt.Errorf("invalid semantic version %q", value)
-		}
-		part, err := strconv.ParseUint(field, 10, 64)
-		if err != nil {
-			return version{}, fmt.Errorf("invalid semantic version %q", value)
-		}
-		parsed.parts[index] = part
-	}
-	return parsed, nil
+	return version{tag: value}, nil
 }
 
 func compareVersions(left, right version) int {
-	for index := range left.parts {
-		if left.parts[index] < right.parts[index] {
-			return -1
-		}
-		if left.parts[index] > right.parts[index] {
-			return 1
-		}
-	}
-	return 0
+	return semver.Compare(left.tag, right.tag)
 }
 
 func validatePlatform(goos, goarch string) error {
