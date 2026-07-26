@@ -26,7 +26,7 @@ versions.
 > [!IMPORTANT]
 > `jup` selects JDKs and Maven installations that are already present. It does
 > not download or uninstall them. Apache Maven is the only supported build tool
-> in v0.2.0.
+> in v0.3.0.
 
 ## Install
 

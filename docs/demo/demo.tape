@@ -61,11 +61,7 @@ Sleep 1s
 Enter
 Sleep 2s
 
-Type "jup run mvn clean compile"
-Enter
-Sleep 1s
-Down
-Sleep 1s
+Type "jup run mvn clean compile --project java8"
 Enter
 Sleep 2s
 

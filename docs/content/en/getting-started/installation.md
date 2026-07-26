@@ -55,7 +55,7 @@ Linux. Archives, checksums, and installers can also be inspected on
 
 | Variable | Purpose |
 |---|---|
-| `JAVAUP_VERSION` | Install a specific release, such as `v0.2.0` |
+| `JAVAUP_VERSION` | Install a specific release, such as `v0.3.0` |
 | `JAVAUP_HOME` | Use a custom absolute installation and configuration directory |
 | `JAVAUP_NO_MODIFY_PATH` | Install without updating the shell profile or user PATH |
 

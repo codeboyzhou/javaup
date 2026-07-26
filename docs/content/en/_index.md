@@ -13,7 +13,7 @@ versions.
 
 > `jup` selects toolchains that are already installed. It does not download or
 > uninstall JDKs or Maven. Apache Maven is the only supported build tool in
-> v0.2.0.
+> v0.3.0.
 
 ## Why javaup?
 

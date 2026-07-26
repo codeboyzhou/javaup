@@ -19,7 +19,7 @@
 </p>
 
 > [!IMPORTANT]
-> `jup` 负责选择本机已经安装的 JDK 和 Maven，不会下载或卸载它们。v0.2.0 目前只支持 Apache Maven。
+> `jup` 负责选择本机已经安装的 JDK 和 Maven，不会下载或卸载它们。v0.3.0 目前只支持 Apache Maven。
 
 ## 安装
 
