@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -24,7 +25,13 @@ type projectRunner interface {
 type runnerFactory func() (projectRunner, error)
 
 type projectPicker interface {
-	Pick(ctx context.Context, tool buildtool.Type, streams project.Streams) (string, error)
+	Pick(
+		ctx context.Context,
+		tool buildtool.Type,
+		keyword string,
+		interactive bool,
+		streams project.Streams,
+	) (string, error)
 }
 
 type projectPickerFactory func() (projectPicker, error)
@@ -80,24 +87,28 @@ func newRunBuildToolCommand(
 	isInteractive interactiveTerminal,
 ) *cobra.Command {
 	return &cobra.Command{
-		Use:                name + " [arguments...]",
+		Use:                name + " [arguments...] [--project <keyword>]",
 		Short:              description,
 		Args:               cobra.ArbitraryArgs,
 		DisableFlagParsing: true,
 		RunE: func(command *cobra.Command, args []string) error {
+			mavenArgs, keyword, err := splitProjectKeyword(args)
+			if err != nil {
+				return err
+			}
 			streams := project.Streams{
 				Stdin:  command.InOrStdin(),
 				Stdout: command.OutOrStdout(),
 				Stderr: command.ErrOrStderr(),
 			}
 			var root string
-			var err error
-			if isInteractive(streams.Stdin, streams.Stdout) {
+			interactive := isInteractive(streams.Stdin, streams.Stdout)
+			if interactive || keyword != "" {
 				picker, pickerErr := pickerFactory()
 				if pickerErr != nil {
 					return pickerErr
 				}
-				root, err = picker.Pick(command.Context(), tool, streams)
+				root, err = picker.Pick(command.Context(), tool, keyword, interactive, streams)
 			} else {
 				root, err = workingDirectory()
 				if err != nil {
@@ -111,9 +122,34 @@ func newRunBuildToolCommand(
 			if err != nil {
 				return err
 			}
-			return runner.Run(command.Context(), root, tool, args, streams)
+			return runner.Run(command.Context(), root, tool, mavenArgs, streams)
 		},
 	}
+}
+
+func splitProjectKeyword(args []string) ([]string, string, error) {
+	if len(args) == 0 {
+		return args, "", nil
+	}
+	last := args[len(args)-1]
+	if strings.HasPrefix(last, "--project=") {
+		keyword := strings.TrimSpace(strings.TrimPrefix(last, "--project="))
+		if keyword == "" {
+			return nil, "", fmt.Errorf("project keyword cannot be empty")
+		}
+		return args[:len(args)-1], keyword, nil
+	}
+	if len(args) >= 2 && args[len(args)-2] == "--project" {
+		keyword := strings.TrimSpace(last)
+		if keyword == "" {
+			return nil, "", fmt.Errorf("project keyword cannot be empty")
+		}
+		return args[:len(args)-2], keyword, nil
+	}
+	if last == "--project" {
+		return nil, "", fmt.Errorf("--project requires a keyword")
+	}
+	return args, "", nil
 }
 
 func defaultProjectPickerFactory() (projectPicker, error) {

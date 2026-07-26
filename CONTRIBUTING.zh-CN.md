@@ -6,9 +6,7 @@
 
 ## 报告问题
 
-提交 Issue 前，请先搜索已有 Issue，并阅读
-[常见问题](https://codeboyzhou.github.io/javaup/zh-cn/reference/troubleshooting/)。
-为了让问题能够被复现，请提供：
+提交 Issue 前，请先搜索已有 Issue，并阅读[常见问题](https://codeboyzhou.github.io/javaup/zh-cn/reference/troubleshooting/)。为了让问题能够被复现，请提供：
 
 - 操作系统和处理器架构；
 - `jup version` 输出；
@@ -37,8 +35,7 @@ go test ./...
 go tool -modfile=govulncheck.mod govulncheck ./...
 ```
 
-GolangCI-Lint 和 govulncheck 固定在独立的 Go module 文件中，不需要全局安装，
-也不会污染应用依赖。
+GolangCI-Lint 和 govulncheck 固定在独立的 Go module 文件中，不需要全局安装，也不会污染应用依赖。
 
 ## 推荐开发流程
 
@@ -60,8 +57,7 @@ go test ./internal/javainfo -count=5
 go run build.go
 ```
 
-构建会在第一个失败阶段停止。CI 会在 Ubuntu、Windows 和 macOS 上执行
-`go run build.go verify`。
+构建会在第一个失败阶段停止。CI 会在 Ubuntu、Windows 和 macOS 上执行 `go run build.go verify`。
 
 ## 设计与测试要求
 
@@ -98,9 +94,7 @@ fix(maven): handle missing executable in path
 docs(readme): improve quick start
 ```
 
-subject 必须使用英文、小写和祈使语气，最长 72 个字符，结尾不加句号。允许的 type
-包括 `feat`、`fix`、`docs`、`style`、`refactor`、`perf`、`test`、`build`、
-`ci` 和 `chore`。
+subject 必须使用英文、小写和祈使语气，最长 72 个字符，结尾不加句号。允许的 type 包括 `feat`、`fix`、`docs`、`style`、`refactor`、`perf`、`test`、`build`、`ci` 和 `chore`。
 
 Pull Request 需要说明：
 

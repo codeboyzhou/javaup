@@ -14,7 +14,7 @@ weight: 10
 | `jup projects remove <路径>` | 删除指定项目保存的配置 |
 | `jup projects prune [--dry-run]` | 预览或清理失效项目记录 |
 | `jup status` | 显示保存的工具链 |
-| `jup run mvn <参数...>` | 使用保存的工具链运行 Maven |
+| `jup run mvn <参数...> [--project <关键词>]` | 使用保存的工具链运行 Maven，并可按关键词过滤项目选择 |
 | `jup settings add <别名> <文件>` | 添加或更新 settings 别名 |
 | `jup settings list` | 列出 settings 别名 |
 | `jup settings use <别名>` | 为当前项目绑定别名 |

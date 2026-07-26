@@ -14,7 +14,7 @@ weight: 10
 | `jup projects remove <path>` | Remove one project's saved configuration |
 | `jup projects prune [--dry-run]` | Preview or remove stale project records |
 | `jup status` | Show the saved toolchain |
-| `jup run mvn <args...>` | Run Maven with the saved toolchain |
+| `jup run mvn <args...> [--project <keyword>]` | Run Maven with the saved toolchain and optionally filter project selection |
 | `jup settings add <alias> <file>` | Register or update a settings alias |
 | `jup settings list` | List settings aliases |
 | `jup settings use <alias>` | Bind an alias to the current project |
