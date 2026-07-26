@@ -29,6 +29,7 @@ func newRootCommand(options Options) *cobra.Command {
 	// passed into their constructors instead of accessed through global state.
 	root.AddCommand(newDoctorCommand(defaultDoctorFactory, defaultWorkingDirectory))
 	root.AddCommand(newInitCommand(defaultInitializerFactory, defaultWorkingDirectory))
+	root.AddCommand(newProjectsCommand(defaultProjectsFactory))
 	root.AddCommand(newUninitCommand(defaultUninitializerFactory, defaultWorkingDirectory))
 	root.AddCommand(newRunCommand(defaultRunnerFactory, defaultWorkingDirectory))
 	root.AddCommand(newSettingsCommand(

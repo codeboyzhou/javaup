@@ -128,6 +128,63 @@ func (s *UsageStore) Delete(ctx context.Context, projectRoot string) error {
 	return s.saveRegistry(registry)
 }
 
+// Prune removes every usage record whose project identity is not in keep.
+// A dry run reports the number of records without changing the store.
+func (s *UsageStore) Prune(ctx context.Context, keep map[string]struct{}, dryRun bool) (int, error) {
+	registry, err := s.loadRegistry()
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	for key := range registry.Projects {
+		if _, exists := keep[key]; !exists {
+			removed++
+		}
+	}
+	if dryRun || removed == 0 {
+		return removed, nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
+		return 0, fmt.Errorf("create project usage directory: %w", err)
+	}
+	lock := flock.New(s.path + ".lock")
+	locked, err := lock.TryLockContext(ctx, 25*time.Millisecond)
+	if err != nil {
+		return 0, fmt.Errorf("lock project usage: %w", err)
+	}
+	if !locked {
+		return 0, fmt.Errorf("lock project usage: canceled")
+	}
+	defer func() { _ = lock.Unlock() }()
+
+	registry, err = s.loadRegistry()
+	if err != nil {
+		return 0, err
+	}
+	removed = 0
+	for key := range registry.Projects {
+		if _, exists := keep[key]; exists {
+			continue
+		}
+		delete(registry.Projects, key)
+		removed++
+	}
+	if removed == 0 {
+		return 0, nil
+	}
+	if len(registry.Projects) == 0 {
+		if err := os.Remove(s.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return 0, fmt.Errorf("remove project usage: %w", err)
+		}
+		return removed, nil
+	}
+	if err := s.saveRegistry(registry); err != nil {
+		return 0, err
+	}
+	return removed, nil
+}
+
 func (s *UsageStore) loadRegistry() (usageRegistry, error) {
 	registry := usageRegistry{SchemaVersion: usageSchemaVersion, Projects: make(map[string]Usage)}
 	// #nosec G304 -- path is fixed when the store is created.

@@ -113,3 +113,51 @@ func TestUsageStoreDeleteRemovesProjectRecord(t *testing.T) {
 		t.Errorf("Stat() error = %v, want usage file removed", err)
 	}
 }
+
+func TestUsageStorePruneSupportsDryRun(t *testing.T) {
+	t.Parallel()
+
+	keepRoot := t.TempDir()
+	removeRoot := t.TempDir()
+	path := filepath.Join(t.TempDir(), "state", "project-usage.json")
+	store := NewUsageStore(path)
+	for _, root := range []string{keepRoot, removeRoot} {
+		if err := store.Touch(context.Background(), root, time.Now()); err != nil {
+			t.Fatalf("Touch(%s) error = %v", root, err)
+		}
+	}
+	keep := map[string]struct{}{projectPathIdentity(keepRoot): {}}
+
+	removed, err := store.Prune(context.Background(), keep, true)
+	if err != nil {
+		t.Fatalf("Prune(dry run) error = %v", err)
+	}
+	if removed != 1 {
+		t.Fatalf("Prune(dry run) removed = %d, want 1", removed)
+	}
+	records, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load(after dry run) error = %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("records after dry run = %d, want 2", len(records))
+	}
+
+	removed, err = store.Prune(context.Background(), keep, false)
+	if err != nil {
+		t.Fatalf("Prune() error = %v", err)
+	}
+	if removed != 1 {
+		t.Fatalf("Prune() removed = %d, want 1", removed)
+	}
+	records, err = store.Load()
+	if err != nil {
+		t.Fatalf("Load(after prune) error = %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("records after prune = %d, want 1", len(records))
+	}
+	if _, exists := records[projectPathIdentity(keepRoot)]; !exists {
+		t.Errorf("kept record is missing: %#v", records)
+	}
+}

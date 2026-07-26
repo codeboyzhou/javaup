@@ -129,6 +129,44 @@ running `jup init` again.
 `doctor` exits with status 1 when any check fails, so it can also be used in
 scripts. Warnings do not change the successful exit status.
 
+## Manage initialized projects
+
+The global project registry can be inspected without entering each project:
+
+```shell
+jup projects list
+```
+
+The table includes the project name, build tool, Java version, registry status,
+usage count, last-used time, and full path. Status is one of:
+
+- `available`: the saved project root still exists;
+- `missing`: the configuration is readable, but the project root is gone;
+- `invalid`: the configuration is corrupt, unsupported, or stored under an
+  inconsistent filename.
+
+Remove one known project by its explicit path:
+
+```shell
+jup projects remove /path/to/project
+```
+
+The command removes both its configuration and usage-ranking record. It is
+idempotent when no matching configuration exists. Using a full path avoids
+ambiguity when multiple projects have the same directory name.
+
+Clean every missing or invalid configuration, plus usage records that no
+longer belong to an available project:
+
+```shell
+jup projects prune --dry-run
+jup projects prune
+```
+
+The dry run prints exactly what would be removed without changing any files.
+`prune` never deletes project source directories, JDKs, Maven installations, or
+settings files.
+
 ## Run Maven
 
 Pass Maven arguments after `jup run mvn`:

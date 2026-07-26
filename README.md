@@ -177,6 +177,7 @@ the current directory and starts Maven there without prompting.
 - Binds reusable Maven `settings.xml` aliases to individual projects.
 - Diagnoses stale Maven, JDK, POM, and settings configuration with actionable
   repair guidance.
+- Lists all initialized projects and removes explicit or stale global records.
 - Selects initialized projects globally and ranks them by decaying recent-use
   frequency.
 - Resolves `doctor`, `status`, `run`, `settings use/unset`, and `uninit` from any
@@ -206,6 +207,9 @@ settings.
 |---|---|
 | `jup init` | Detect and save the current project's Maven and JDK |
 | `jup doctor` | Diagnose the saved toolchain and suggest repairs |
+| `jup projects list` | List all initialized projects and their status |
+| `jup projects remove <path>` | Remove one project's saved configuration |
+| `jup projects prune` | Remove missing, invalid, and orphaned project records |
 | `jup status` | Show the saved toolchain |
 | `jup run mvn <args...>` | Run Maven with the saved toolchain |
 | `jup settings add <alias> <file>` | Register or update a settings alias |

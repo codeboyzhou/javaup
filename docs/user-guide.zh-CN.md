@@ -116,6 +116,40 @@ jup doctor
 存在任何失败项时，`doctor` 以状态码 1 退出，因此也可用于脚本。警告不会改变成功
 退出状态。
 
+## 管理已初始化项目
+
+无需逐个进入项目目录，即可查看全局项目注册表：
+
+```shell
+jup projects list
+```
+
+表格包含项目名称、构建工具、Java 版本、注册状态、使用次数、最后使用时间和完整
+路径。状态分为：
+
+- `available`：保存的项目根目录仍然存在；
+- `missing`：配置可以读取，但项目根目录已经不存在；
+- `invalid`：配置损坏、版本不受支持，或配置文件名与项目路径不一致。
+
+通过明确的项目路径删除单个记录：
+
+```shell
+jup projects remove /path/to/project
+```
+
+该命令同时删除项目配置和使用排序记录；没有匹配配置时仍然成功。使用完整路径可以
+避免多个同名项目产生歧义。
+
+批量清理所有缺失或损坏的配置，以及不再属于有效项目的孤立使用记录：
+
+```shell
+jup projects prune --dry-run
+jup projects prune
+```
+
+`--dry-run` 会准确显示将被清理的记录，但不会修改文件。`prune` 不会删除项目源码
+目录、JDK、Maven 安装或 settings 文件。
+
 ## 运行 Maven
 
 将 Maven 参数放在 `jup run mvn` 后面：
