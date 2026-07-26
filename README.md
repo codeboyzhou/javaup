@@ -1,8 +1,8 @@
 <h1 align="center">javaup</h1>
 
-<p align="center"><strong>Project-aware Java toolchains for Maven builds</strong></p>
-
 <p align="center">English | <a href="README.zh-CN.md">简体中文</a></p>
+
+<p align="center"><strong>Use the correct Java toolchain for every Maven project — automatically.</strong></p>
 
 <p align="center">
   <a href="https://github.com/codeboyzhou/javaup/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/codeboyzhou/javaup"></a>
@@ -12,14 +12,12 @@
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/codeboyzhou/javaup"></a>
 </p>
 
-<p align="center">
-  <strong>The right JDK, the right Maven, and the right <code>settings.xml</code> for every project build.</strong>
-</p>
-
-`javaup` (command: `jup`) detects the Java version required by a Maven project,
-finds a matching installed JDK, and remembers that project's Maven executable,
-JDK, and optional `settings.xml`. It recreates the saved toolchain for every
-build without changing `JAVA_HOME` or `PATH` in the current shell.
+`javaup` (command: `jup`) is a Java toolchain manager built for Maven projects.
+It detects the Java version required by a project, selects a matching installed
+JDK, and remembers the project's Maven installation path, JDK, and optional
+`settings.xml`. Every subsequent build reuses this toolchain, so there is no need
+to change `JAVA_HOME` or `PATH` in the current shell or manually switch between
+versions.
 
 <p align="center">
   <img src="docs/demo/demo.gif" alt="javaup demo">

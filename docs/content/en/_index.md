@@ -2,12 +2,14 @@
 title: Welcome to the javaup documentation
 ---
 
-# Project-Aware Java Toolchains for Maven Builds
+# Use the Correct Java Toolchain for Every Maven Project—Automatically
 
-`javaup` (command: `jup`) detects the Java version required by a Maven project,
-finds a matching installed JDK, and remembers the Maven executable, JDK, and
-optional `settings.xml` selection for that project. Each build recreates the
-saved toolchain without changing `JAVA_HOME` or `PATH` in the current shell.
+`javaup` (command: `jup`) is a Java toolchain manager built for Maven projects.
+It detects the Java version required by a project, selects a matching installed
+JDK, and remembers the project's Maven installation path, JDK, and optional
+`settings.xml`. Every subsequent build reuses this toolchain, so there is no need
+to change `JAVA_HOME` or `PATH` in the current shell or manually switch between
+versions.
 
 > `jup` selects toolchains that are already installed. It does not download or
 > uninstall JDKs or Maven. Apache Maven is the only supported build tool in

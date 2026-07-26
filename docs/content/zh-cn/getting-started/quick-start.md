@@ -32,11 +32,8 @@ Java home: /opt/jdks/temurin-17
 Maven settings: default
 ```
 
-在交互式终端中，`jup run mvn` 会列出所有已经初始化的 Maven 项目。使用方向键和
-回车选择项目；最近且频繁使用的项目会自动排在前面，Maven 从所选项目根目录启动。
+在交互式终端中，`jup run mvn` 会列出所有已经初始化的 Maven 项目。使用方向键和回车选择项目；最近且频繁使用的项目会自动排在前面，Maven 从所选项目根目录启动。
 
-在 CI 或输入重定向等非交互环境中不会显示选择器。`jup` 从当前目录向上寻找最近的
-已初始化项目，并直接启动 Maven。
+在 CI 或输入重定向等非交互环境中不会显示选择器。`jup` 从当前目录向上寻找最近的已初始化项目，并直接启动 Maven。
 
-接下来可以阅读[管理项目](../../user-guide/managing-projects/)和
-[运行 Maven](../../user-guide/running-maven/)。
+接下来可以阅读[管理项目](../../user-guide/managing-projects/)和[运行 Maven](../../user-guide/running-maven/)。

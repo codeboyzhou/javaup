@@ -14,8 +14,7 @@ weight: 10
 curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/install.sh | sh
 ```
 
-安装器会识别平台、校验 Release 文件、将 `jup` 安装到 `~/.javaup/bin`，并更新
-对应的 shell 配置文件。
+安装器会识别平台、校验 Release 文件、将 `jup` 安装到 `~/.javaup/bin`，并更新对应的 shell 配置文件。
 
 ## Windows
 
@@ -25,9 +24,7 @@ curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/instal
 irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
 ```
 
-安装器会校验 Release 文件，将 `jup.exe` 安装到
-`%USERPROFILE%\.javaup\bin`，并把该目录加入用户 PATH。安装期间已经打开的终端和
-IDE 需要重启，才能读取新的 PATH。
+安装器会校验 Release 文件，将 `jup.exe` 安装到 `%USERPROFILE%\.javaup\bin`，并把该目录加入用户 PATH。安装期间已经打开的终端和 IDE 需要重启，才能读取新的 PATH。
 
 ## 其他安装方式
 
@@ -45,9 +42,7 @@ cd javaup
 go run build.go
 ```
 
-Windows 产物位于 `dist/jup.exe`，macOS 和 Linux 产物位于 `dist/jup`。也可以在
-[GitHub Releases](https://github.com/codeboyzhou/javaup/releases/latest) 中检查并
-手工下载安装包、校验文件和安装器。
+Windows 产物位于 `dist/jup.exe`，macOS 和 Linux 产物位于 `dist/jup`。也可以在 [GitHub Releases](https://github.com/codeboyzhou/javaup/releases/latest) 中检查并手工下载安装包、校验文件和安装器。
 
 ## 安装器选项
 
