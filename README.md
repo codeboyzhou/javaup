@@ -17,123 +17,41 @@
 </p>
 
 `javaup` (command: `jup`) detects the Java version required by a Maven project,
-finds a matching installed JDK, and remembers the Maven executable, JDK, and
-optional `settings.xml` selection for that project. It recreates the saved
-toolchain whenever you build, without changing `JAVA_HOME` or `PATH` in your
-current shell.
+finds a matching installed JDK, and remembers that project's Maven executable,
+JDK, and optional `settings.xml`. It recreates the saved toolchain for every
+build without changing `JAVA_HOME` or `PATH` in the current shell.
 
 <p align="center">
-  <img src="docs/demo/demo.gif" alt="demo.gif">
+  <img src="docs/demo/demo.gif" alt="javaup demo">
 </p>
 
 > [!IMPORTANT]
-> `jup` selects toolchains that are already installed. It does not download or
-> uninstall JDKs or Maven. Apache Maven is the only supported build tool in
-> v0.2.0.
-
-## Why javaup?
-
-A single development machine often hosts projects from several Java
-generations: a legacy application on Java 8, a current service on Java 17, and
-a newer repository on Java 21. Switching between them usually means changing
-environment variables, remembering which Maven installation to use, or relying
-on IDE settings that do not follow you into the terminal.
-
-With `jup`, each project gets one explicit, inspectable toolchain:
-
-| Task | Without `jup` | With `jup` |
-|---|---|---|
-| Switch projects | Edit `JAVA_HOME` and `PATH` | Use the JDK saved for the project |
-| Select Maven | Depend on whatever is on PATH | Prefer the project Wrapper, otherwise save Maven from PATH |
-| Use private repositories | Repeat `--settings` or replace a global file | Bind a named `settings.xml` to the project |
-| Build from anywhere | Change directories and reconstruct the environment | Select any initialized project from a ranked list |
-| Preserve the shell | Risk affecting later commands | Change only the spawned build process |
-
-### How it fits with existing tools
-
-`javaup` complements JDK version managers and Maven's own tooling:
-
-- **SDKMAN!, asdf, and jEnv** install or switch tools for a user or shell. `jup`
-  does not replace them; it can discover the JDKs they installed.
-- **Maven Wrapper** pins the Maven distribution for a repository. `jup` detects
-  and prefers the Wrapper automatically.
-- **Maven Toolchains** lets Maven plugins select a JDK. `jup` can discover
-  `<jdkHome>` entries from `~/.m2/toolchains.xml` and also controls the JDK that
-  launches Maven itself.
-
-The useful layer `jup` adds is a local project binding: **this Maven executable
-+ this JDK + this settings alias**, launched through one stable command.
+> `jup` selects JDKs and Maven installations that are already present. It does
+> not download or uninstall them. Apache Maven is the only supported build tool
+> in v0.2.0.
 
 ## Install
 
-### macOS or Linux
+macOS or Linux:
 
 ```shell
 curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/install.sh | sh
 ```
 
-The installer detects the operating system and architecture, verifies the
-release checksum, installs `jup` under `~/.javaup/bin`, and updates the relevant
-shell profile.
-
-### Windows
-
-Run in PowerShell 5.1 or later:
+Windows PowerShell 5.1 or later:
 
 ```powershell
 irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
 ```
 
-The installer verifies the release checksum, installs `jup.exe` under
-`%USERPROFILE%\.javaup\bin`, and adds that directory to the user PATH.
+Prebuilt releases support Windows, macOS, and Linux on amd64 and arm64. See the
+[installation guide](https://codeboyzhou.github.io/javaup/getting-started/installation/)
+for checksums, `go install`, source builds, and installer options.
 
-Prefer to inspect the files first? Download an archive, checksum, or installer
-from [GitHub Releases](https://github.com/codeboyzhou/javaup/releases/latest).
-Prebuilt binaries are available for Windows, macOS, and Linux on amd64 and
-arm64.
+## Quick Start
 
-<details>
-<summary>Other installation options</summary>
-
-Install with the Go version declared in [`go.mod`](go.mod), or newer:
-
-```shell
-go install github.com/codeboyzhou/javaup/cmd/jup@latest
-```
-
-Or build from source:
-
-```shell
-git clone https://github.com/codeboyzhou/javaup.git
-cd javaup
-go run build.go
-```
-
-The binary is written to `dist/jup.exe` on Windows or `dist/jup` on macOS and
-Linux.
-
-</details>
-
-The installers support these optional environment variables:
-
-| Variable | Purpose |
-|---|---|
-| `JAVAUP_VERSION` | Install a specific release, such as `v0.2.0` |
-| `JAVAUP_HOME` | Use a custom absolute installation and configuration directory |
-| `JAVAUP_NO_MODIFY_PATH` | Install without updating the shell profile or user PATH |
-
-Verify the installation:
-
-```shell
-jup version
-```
-
-## Quick start
-
-Before starting, the Maven project must have a `pom.xml`, a Maven Wrapper or
-`mvn` on PATH, and an installed full JDK matching the project's Java version.
-
-Initialize, inspect, and build:
+The Maven project needs a `pom.xml`, Maven Wrapper or `mvn` on PATH, and a
+matching full JDK installed locally.
 
 ```shell
 cd /path/to/your/maven-project
@@ -142,121 +60,47 @@ jup status
 jup run mvn clean package
 ```
 
-Example status:
+In an interactive terminal, `jup run mvn` can select any initialized project
+and ranks frequently and recently used projects first. In CI or redirected
+pipelines, it resolves the nearest initialized project without prompting.
 
-```text
-Project: /work/demo
-Build tool: Maven 3.9.11 (wrapper)
-Build executable: /work/demo/mvnw
-Java version: 17.0.12
-Java home: /opt/jdks/temurin-17
-Maven settings: default
-```
+## What It Does
 
-In an interactive terminal, `jup run mvn` lists every initialized Maven project
-regardless of the current directory. Use the arrow keys and Enter to select a
-project; Maven starts in that project's saved root directory. Frequently and
-recently used projects rise to the top. Maven remains connected directly to the
-terminal, preserving interactive input, logs, and exit codes.
-
-In non-interactive environments such as CI and redirected pipelines, `jup`
-keeps the previous behavior: it resolves the nearest initialized project from
-the current directory and starts Maven there without prompting.
-
-## Highlights
-
-- Detects the Java release from `pom.xml`, compiler plugin configuration,
-  properties, and local parent POMs.
-- Detects `mvnw` / `mvnw.cmd` and falls back to Maven from PATH.
+- Detects Java requirements from POM properties, compiler plugin configuration,
+  and local parent POMs.
+- Prefers Maven Wrapper and falls back to Maven from PATH.
 - Finds installed JDKs through Maven, environment variables, PATH, Maven
-  Toolchains, common installation locations, and sibling JDK directories.
-- Saves the Maven executable, JDK path, versions, and initialization time per
-  project.
-- Sets `JAVA_HOME` and puts the selected JDK's `bin` first on PATH only for the
-  spawned build process.
-- Binds reusable Maven `settings.xml` aliases to individual projects.
-- Diagnoses stale Maven, JDK, POM, and settings configuration with actionable
-  repair guidance.
-- Lists all initialized projects and removes explicit or stale global records.
-- Selects initialized projects globally and ranks them by decaying recent-use
-  frequency.
-- Resolves `doctor`, `status`, `run`, `settings use/unset`, and `uninit` from any
-  descendant directory.
-- Runs on Windows, macOS, and Linux, with CI verification on all three.
+  Toolchains, and common platform locations.
+- Applies the selected JDK and optional Maven settings alias only to the spawned
+  build process.
+- Manages and diagnoses initialized projects globally without modifying project
+  source files.
 
-## Maven settings aliases
-
-Register settings files once, then select one per project:
-
-```shell
-jup settings add intranet /path/to/settings-intranet.xml
-jup settings add public /path/to/settings-public.xml
-
-cd /path/to/company-project
-jup settings use intranet
-jup run mvn clean deploy
-```
-
-`jup` saves only the normalized file path. It does not copy the XML file or its
-credentials. Use `jup settings unset` to return a project to Maven's default
-settings.
-
-## Command overview
-
-| Command | Purpose |
-|---|---|
-| `jup init` | Detect and save the current project's Maven and JDK |
-| `jup doctor` | Diagnose the saved toolchain and suggest repairs |
-| `jup projects list` | List all initialized projects and their status |
-| `jup projects remove <path>` | Remove one project's saved configuration |
-| `jup projects prune` | Remove missing, invalid, and orphaned project records |
-| `jup status` | Show the saved toolchain |
-| `jup run mvn <args...>` | Run Maven with the saved toolchain |
-| `jup settings add <alias> <file>` | Register or update a settings alias |
-| `jup settings list` | List settings aliases |
-| `jup settings use <alias>` | Bind an alias to the current project |
-| `jup settings unset` | Remove the project's settings binding |
-| `jup settings remove <alias>` | Remove a global alias |
-| `jup uninit` | Remove the project's saved `jup` configuration |
-| `jup uninstall` | Uninstall jup while preserving configuration |
-| `jup uninstall --purge` | Uninstall jup and remove all javaup data |
-| `jup update --check` | Check whether a newer release is available |
-| `jup update` | Download, verify, and install the latest release |
-
-See the [full user guide](docs/user-guide.md) for detection rules,
-configuration storage, detailed command behavior, and troubleshooting.
-
-## Project status and scope
-
-v0.2.0 adds built-in, checksum-verified self-update and safe uninstall
-workflows. Release archives are built for Windows, macOS, and Linux on amd64
-and arm64, and every archive is covered by a published SHA-256 checksum.
-
-Current boundaries:
-
-- Maven is the only supported build tool; Gradle is not yet supported.
-- JDKs and Maven must already be installed locally.
-- Project configuration is local to the current user and is not written to the
-  repository.
-- Saved JDK and Maven locations are absolute paths; run `jup init` again after
-  moving a tool or project.
-- Maven settings aliases store paths, not file contents or credentials.
-
-If `javaup` cannot handle a real project, please open an
-[issue](https://github.com/codeboyzhou/javaup/issues) with the operating system,
-POM structure, expected Java version, and relevant command output.
+See [Why javaup?](https://codeboyzhou.github.io/javaup/#why-javaup) for a
+detailed comparison with manual environment switching, SDKMAN!, asdf, jEnv,
+Maven Wrapper, and Maven Toolchains.
 
 ## Documentation
 
-- [User guide](docs/user-guide.md) — commands, detection, storage, and troubleshooting
-- [Contributing guide](CONTRIBUTING.md) — development setup, verification, and project layout
-- [Simplified Chinese README](README.zh-CN.md)
-- [Simplified Chinese user guide](docs/user-guide.zh-CN.md)
+- [Documentation site](https://codeboyzhou.github.io/javaup/)
+- [Quick start](https://codeboyzhou.github.io/javaup/getting-started/quick-start/)
+- [User guide](https://codeboyzhou.github.io/javaup/user-guide/)
+- [Command reference](https://codeboyzhou.github.io/javaup/reference/command-reference/)
+- [Troubleshooting](https://codeboyzhou.github.io/javaup/reference/troubleshooting/)
+- [简体中文文档](https://codeboyzhou.github.io/javaup/zh-cn/)
+
+## Current Scope
+
+Maven is currently the only supported build tool. JDKs and Maven must already
+be installed, and saved project/tool paths are local absolute paths. Maven
+settings aliases store paths only, never file contents or credentials. See the
+[project scope](https://codeboyzhou.github.io/javaup/reference/project-scope/)
+for the complete boundaries.
 
 ## Contributing
 
 Bug reports, compatibility cases, documentation improvements, and code
-contributions are welcome. To run the complete local verification pipeline:
+contributions are welcome. Run the complete local verification pipeline with:
 
 ```shell
 go mod download

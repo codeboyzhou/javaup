@@ -21,109 +21,35 @@ JDK，并记住项目对应的 Maven 可执行文件、JDK 和可选的 `setting
 构建都会复用这套工具链，而且不会修改当前 shell 的 `JAVA_HOME` 或 `PATH`。
 
 <p align="center">
-  <img src="docs/demo/demo.gif" alt="demo.gif">
+  <img src="docs/demo/demo.gif" alt="javaup 演示">
 </p>
 
 > [!IMPORTANT]
-> `jup` 负责选择本机已经安装的工具链，不会下载或卸载 JDK/Maven。v0.2.0 目前
+> `jup` 负责选择本机已经安装的 JDK 和 Maven，不会下载或卸载它们。v0.2.0 目前
 > 只支持 Apache Maven。
-
-## 为什么选择 javaup？
-
-一台开发机上往往同时存在多个 Java 项目：旧系统仍使用 Java 8，当前服务使用
-Java 17，新项目可能已经升级到 Java 21。切换项目时，开发者经常需要修改环境变量、
-记住每个项目应该使用哪个 Maven，或者依赖一套无法带到终端中的 IDE 配置。
-
-使用 `jup` 后，每个项目都有一套明确、可检查的工具链：
-
-| 操作 | 不使用 `jup` | 使用 `jup` |
-|---|---|---|
-| 切换项目 | 手动修改 `JAVA_HOME` 和 `PATH` | 自动使用项目保存的 JDK |
-| 选择 Maven | 依赖 PATH，容易误用版本 | 优先使用项目 Wrapper，否则保存 PATH 中的 Maven |
-| 使用私服 | 反复传递 `--settings` 或替换全局文件 | 为项目绑定命名的 `settings.xml` |
-| 在子模块构建 | 回到根目录并重新判断环境 | 从任意子目录识别已初始化项目 |
-| 保持 shell 干净 | 修改环境后可能影响后续命令 | 只改变启动出来的构建子进程 |
-
-### 与现有工具是什么关系？
-
-`javaup` 并不是要替代 JDK 版本管理器或 Maven 自带的工具：
-
-- **SDKMAN!、asdf 和 jEnv** 负责安装工具或切换用户、shell 使用的版本；`jup`
-  可以发现它们已经安装的 JDK，并按项目使用。
-- **Maven Wrapper** 为仓库固定 Maven 发行版；`jup` 会自动发现并优先使用 Wrapper。
-- **Maven Toolchains** 允许 Maven 插件选择 JDK；`jup` 可以读取
-  `~/.m2/toolchains.xml` 中的 `<jdkHome>`，同时控制启动 Maven 自身所用的 JDK。
-
-`jup` 补充的是项目级绑定：**这个 Maven 可执行文件 + 这个 JDK + 这个 settings
-别名**，以后统一通过一个稳定的命令启动。
 
 ## 安装
 
-### macOS 或 Linux
+macOS 或 Linux：
 
 ```shell
 curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/install.sh | sh
 ```
 
-安装器会识别操作系统和处理器架构、校验 Release 文件、将 `jup` 安装到
-`~/.javaup/bin`，并更新对应的 shell 配置文件。
-
-### Windows
-
-在 PowerShell 5.1 或更高版本中运行：
+Windows PowerShell 5.1 或更高版本：
 
 ```powershell
 irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
 ```
 
-安装器会校验 Release 文件，将 `jup.exe` 安装到
-`%USERPROFILE%\.javaup\bin`，并将该目录加入用户 PATH。
-
-如果希望先检查安装文件，可以从 [GitHub Releases](https://github.com/codeboyzhou/javaup/releases/latest)
-手动下载安装包、校验文件或安装器。项目为 Windows、macOS 和 Linux 提供 amd64
-及 arm64 的预编译程序。
-
-<details>
-<summary>其他安装方式</summary>
-
-使用 [`go.mod`](go.mod) 中声明的 Go 版本或更高版本安装：
-
-```shell
-go install github.com/codeboyzhou/javaup/cmd/jup@latest
-```
-
-或者从源码构建：
-
-```shell
-git clone https://github.com/codeboyzhou/javaup.git
-cd javaup
-go run build.go
-```
-
-Windows 产物位于 `dist/jup.exe`，macOS 和 Linux 产物位于 `dist/jup`。
-
-</details>
-
-安装器支持以下可选环境变量：
-
-| 环境变量 | 用途 |
-|---|---|
-| `JAVAUP_VERSION` | 安装指定版本，例如 `v0.2.0` |
-| `JAVAUP_HOME` | 使用自定义的绝对安装及配置目录 |
-| `JAVAUP_NO_MODIFY_PATH` | 安装时不修改 shell 配置或用户 PATH |
-
-验证安装结果：
-
-```shell
-jup version
-```
+预编译版本支持 Windows、macOS 和 Linux 的 amd64 与 arm64。校验文件、
+`go install`、源码构建和安装器选项请参阅
+[安装指南](https://codeboyzhou.github.io/javaup/zh-cn/getting-started/installation/)。
 
 ## 快速开始
 
-开始之前，Maven 项目需要包含 `pom.xml` 和 Maven Wrapper，或者能够从 PATH 找到
-`mvn`；本机还需要安装与项目 Java 版本匹配的完整 JDK。
-
-初始化、检查、构建只需三步：
+Maven 项目需要包含 `pom.xml` 和 Maven Wrapper，或者能够从 PATH 找到 `mvn`；
+本机还需要安装与项目 Java 版本匹配的完整 JDK。
 
 ```shell
 cd /path/to/your/maven-project
@@ -132,105 +58,36 @@ jup status
 jup run mvn clean package
 ```
 
-`jup status` 输出示例：
+在交互式终端中，`jup run mvn` 可以选择任意已初始化项目，并把最近且频繁使用的
+项目排在前面。在 CI 或输入重定向环境中，它会直接找到最近的已初始化项目，不显示
+选择器。
 
-```text
-Project: /work/demo
-Build tool: Maven 3.9.11 (wrapper)
-Build executable: /work/demo/mvnw
-Java version: 17.0.12
-Java home: /opt/jdks/temurin-17
-Maven settings: default
-```
+## 主要能力
 
-在交互式终端中，`jup run mvn` 会列出所有已经初始化的 Maven 项目，不受当前目录
-限制。使用上下方向键和回车选择项目后，Maven 会从该项目保存的根目录启动。最近且
-频繁使用的项目会自动排在前面。Maven 仍会直接连接到当前终端，保留交互输入、日志
-和退出码。
+- 从 POM 属性、编译插件配置和本地父 POM 中识别 Java 版本。
+- 优先使用 Maven Wrapper，没有 Wrapper 时回退到 PATH 中的 Maven。
+- 从 Maven、环境变量、PATH、Maven Toolchains 和常见平台目录中发现本机 JDK。
+- 只为构建子进程应用所选 JDK 和可选的 Maven settings 别名。
+- 全局管理并检查已初始化项目，不修改项目源码文件。
 
-在 CI、输入重定向等非交互环境中，`jup` 保持原有行为：从当前目录向上寻找最近的
-已初始化项目，并直接从当前目录启动 Maven，不显示选择器。
-
-## 功能亮点
-
-- 从 `pom.xml`、编译插件配置、属性和本地父 POM 中识别 Java 版本。
-- 自动发现 `mvnw` / `mvnw.cmd`，没有 Wrapper 时回退到 PATH 中的 Maven。
-- 从 Maven、环境变量、PATH、Maven Toolchains、常见安装目录和同级 JDK 目录中
-  发现本机 JDK。
-- 为每个项目保存 Maven 可执行文件、JDK 路径、版本和初始化时间。
-- 只在构建子进程中设置 `JAVA_HOME`，并把对应 JDK 的 `bin` 放到 PATH 首位。
-- 支持将可复用的 Maven `settings.xml` 别名绑定到不同项目。
-- 检查 Maven、JDK、POM 和 settings 配置是否失效，并提供可执行的修复建议。
-- 列出所有已初始化项目，并删除指定项目或批量清理失效的全局记录。
-- 可以从任意目录选择已初始化项目，并按带时间衰减的最近使用频率排序。
-- 可以从项目任意子目录执行 `doctor`、`status`、`run`、`settings use/unset` 和
-  `uninit`。
-- 支持 Windows、macOS 和 Linux，CI 会在三个平台执行完整验证。
-
-## Maven settings 别名
-
-只需注册一次 settings 文件，之后可以为每个项目单独选择：
-
-```shell
-jup settings add intranet /path/to/settings-intranet.xml
-jup settings add public /path/to/settings-public.xml
-
-cd /path/to/company-project
-jup settings use intranet
-jup run mvn clean deploy
-```
-
-`jup` 只保存规范化后的文件路径，不会复制 XML 文件或其中的凭据。执行
-`jup settings unset` 可以让项目重新使用 Maven 默认配置。
-
-## 命令速查
-
-| 命令 | 用途 |
-|---|---|
-| `jup init` | 识别并保存当前项目的 Maven 和 JDK |
-| `jup doctor` | 检查保存的工具链并给出修复建议 |
-| `jup projects list` | 列出所有已初始化项目及其状态 |
-| `jup projects remove <路径>` | 删除指定项目保存的配置 |
-| `jup projects prune` | 清理缺失、损坏及孤立的项目记录 |
-| `jup status` | 显示项目保存的工具链 |
-| `jup run mvn <args...>` | 使用保存的工具链运行 Maven |
-| `jup settings add <别名> <文件>` | 添加或更新 settings 别名 |
-| `jup settings list` | 列出 settings 别名 |
-| `jup settings use <别名>` | 为当前项目绑定别名 |
-| `jup settings unset` | 取消项目的 settings 绑定 |
-| `jup settings remove <别名>` | 删除全局别名 |
-| `jup uninit` | 删除项目保存的 `jup` 配置 |
-| `jup uninstall` | 卸载 jup，但保留配置 |
-| `jup uninstall --purge` | 卸载 jup 并删除全部 javaup 数据 |
-| `jup update --check` | 检查是否有新版本 |
-| `jup update` | 下载、校验并安装最新版本 |
-
-Java 版本探测规则、JDK 查找顺序、配置存储和完整排障说明请阅读
-[详细用户指南](docs/user-guide.zh-CN.md)。
-
-## 项目状态与当前边界
-
-v0.2.0 新增内置的 SHA-256 校验自更新和安全卸载流程。Release 为 Windows、macOS
-和 Linux 提供 amd64 与 arm64 安装包，所有文件都包含在公开的 SHA-256 校验文件中。
-
-当前边界：
-
-- 目前只支持 Maven，尚未支持 Gradle。
-- JDK 和 Maven 需要提前安装在本机。
-- 项目配置属于当前用户，不会写入项目仓库。
-- JDK 和 Maven 使用绝对路径保存；移动工具或项目后需要重新执行 `jup init`。
-- Maven settings 别名只保存路径，不保存文件内容或凭据。
-
-如果 `javaup` 无法处理真实项目，请提交
-[Issue](https://github.com/codeboyzhou/javaup/issues)，并附上操作系统、POM 结构、预期
-Java 版本和相关命令输出。
+详细的手工切换环境对比，以及与 SDKMAN!、asdf、jEnv、Maven Wrapper 和 Maven
+Toolchains 的关系，请阅读
+[为什么选择 javaup？](https://codeboyzhou.github.io/javaup/zh-cn/#为什么选择-javaup)。
 
 ## 文档
 
-- [详细用户指南](docs/user-guide.zh-CN.md)——命令、探测规则、配置存储和排障
-- [贡献指南](CONTRIBUTING.zh-CN.md)——开发环境、完整验证和项目结构
-- [英文 README](README.md)
-- [英文用户指南](docs/user-guide.md)
+- [简体中文文档站点](https://codeboyzhou.github.io/javaup/zh-cn/)
+- [快速开始](https://codeboyzhou.github.io/javaup/zh-cn/getting-started/quick-start/)
+- [使用指南](https://codeboyzhou.github.io/javaup/zh-cn/user-guide/)
+- [命令参考](https://codeboyzhou.github.io/javaup/zh-cn/reference/command-reference/)
+- [常见问题](https://codeboyzhou.github.io/javaup/zh-cn/reference/troubleshooting/)
+- [English Documentation](https://codeboyzhou.github.io/javaup/)
+
+## 当前边界
+
+目前只支持 Maven。JDK 和 Maven 需要提前安装，保存的项目与工具路径是当前用户的
+本地绝对路径。Maven settings 别名只保存路径，不保存文件内容或凭据。完整说明请
+阅读[项目边界](https://codeboyzhou.github.io/javaup/zh-cn/reference/project-scope/)。
 
 ## 参与贡献
 
@@ -241,7 +98,7 @@ go mod download
 go run build.go verify
 ```
 
-提交 Pull Request 前请阅读 [贡献指南](CONTRIBUTING.zh-CN.md)。
+提交 Pull Request 前请阅读 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)。
 
 ## License
 

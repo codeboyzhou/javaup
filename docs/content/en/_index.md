@@ -1,0 +1,58 @@
+---
+title: Welcome to the javaup documentation
+---
+
+# Project-Aware Java Toolchains for Maven Builds
+
+`javaup` (command: `jup`) detects the Java version required by a Maven project,
+finds a matching installed JDK, and remembers the Maven executable, JDK, and
+optional `settings.xml` selection for that project. Each build recreates the
+saved toolchain without changing `JAVA_HOME` or `PATH` in the current shell.
+
+> `jup` selects toolchains that are already installed. It does not download or
+> uninstall JDKs or Maven. Apache Maven is the only supported build tool in
+> v0.2.0.
+
+## Why javaup?
+
+A development machine often hosts projects from several Java generations.
+Switching between them usually means changing environment variables,
+remembering which Maven installation to use, or relying on IDE settings that do
+not follow you into the terminal.
+
+| Task                     | Without `jup`                                      | With `jup`                                         |
+|--------------------------|----------------------------------------------------|----------------------------------------------------|
+| Switch projects          | Edit `JAVA_HOME` and `PATH`                        | Use the JDK saved for the project                  |
+| Select Maven             | Depend on whatever is on PATH                      | Prefer the Wrapper, otherwise save Maven from PATH |
+| Use private repositories | Repeat `--settings` or replace a global file       | Bind a named `settings.xml` to the project         |
+| Build from anywhere      | Change directories and reconstruct the environment | Select any initialized project                     |
+| Preserve the shell       | Risk affecting later commands                      | Change only the spawned build process              |
+
+## How It Fits with Existing Tools
+
+- **SDKMAN!, asdf, and jEnv** install or switch tools for a user or shell. `jup`
+  can discover the JDKs they installed.
+- **Maven Wrapper** pins the Maven distribution for a repository. `jup` detects
+  and prefers it automatically.
+- **Maven Toolchains** lets Maven plugins select a JDK. `jup` also discovers
+  `<jdkHome>` entries and controls the JDK that launches Maven itself.
+
+The layer `jup` adds is a local project binding: **this Maven executable + this
+JDK + this settings alias**, launched through one stable command.
+
+## Highlights
+
+- Detects Java requirements from POM properties, compiler plugin configuration,
+  and local parent POMs.
+- Prefers Maven Wrapper and falls back to Maven from PATH.
+- Discovers installed JDKs across environment variables, PATH, Maven
+  Toolchains, and common installation locations.
+- Runs builds with a project-specific child-process environment while leaving
+  the current shell unchanged.
+- Manages initialized projects globally and ranks them by recent use.
+- Diagnoses stale Maven, JDK, POM, and settings configuration.
+- Supports Windows, macOS, and Linux.
+
+Start with [Installation](getting-started/installation/) and
+[Quick Start](getting-started/quick-start/), or open the
+[Command Reference](reference/command-reference/).

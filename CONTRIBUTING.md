@@ -8,7 +8,7 @@ contributions are welcome.
 ## Report a problem
 
 Before opening an issue, search existing issues and review the
-[troubleshooting guide](docs/user-guide.md#troubleshooting). Include enough
+[troubleshooting guide](https://codeboyzhou.github.io/javaup/reference/troubleshooting/). Include enough
 information to reproduce the behavior:
 
 - operating system and architecture;

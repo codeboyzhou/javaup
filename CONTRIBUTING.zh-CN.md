@@ -6,7 +6,8 @@
 
 ## 报告问题
 
-提交 Issue 前，请先搜索已有 Issue，并阅读[常见问题](docs/user-guide.zh-CN.md#常见问题)。
+提交 Issue 前，请先搜索已有 Issue，并阅读
+[常见问题](https://codeboyzhou.github.io/javaup/zh-cn/reference/troubleshooting/)。
 为了让问题能够被复现，请提供：
 
 - 操作系统和处理器架构；

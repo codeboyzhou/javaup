@@ -10,3 +10,9 @@ coverage.out
 
 # VHS demo.gif generated files
 .vhs/
+
+# Hugo generated files and downloaded theme
+docs/public/
+docs/resources/_gen/
+docs/themes/
+docs/.hugo_build.lock
