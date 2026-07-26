@@ -180,8 +180,9 @@ func canonicalProjectRoot(root string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve project root: %w", err)
 	}
-	if resolvedRoot, err := filepath.EvalSymlinks(absoluteRoot); err == nil {
-		absoluteRoot = resolvedRoot
-	}
+	// Preserve the spelling supplied by the caller for stable persisted and
+	// displayed paths. Resolving links here can rewrite equivalent paths, such
+	// as /var to /private/var on macOS or Windows 8.3 path components.
+	// projectPathIdentity resolves existing paths when it needs a comparable key.
 	return filepath.Clean(absoluteRoot), nil
 }

@@ -211,7 +211,14 @@ func configFileName(projectRoot string) string {
 
 func projectPathIdentity(projectRoot string) string {
 	identity := filepath.Clean(projectRoot)
+	// Resolve links only for comparison. Stored and displayed paths retain the
+	// caller's spelling while aliases such as macOS /var and /private/var share
+	// an identity.
+	if resolved, err := filepath.EvalSymlinks(identity); err == nil {
+		identity = filepath.Clean(resolved)
+	}
 	if runtime.GOOS == "windows" {
+		// EvalSymlinks also normalizes Windows short (8.3) path components.
 		identity = strings.ToLower(identity)
 	}
 	return identity
