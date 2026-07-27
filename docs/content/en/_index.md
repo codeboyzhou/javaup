@@ -20,15 +20,15 @@ Switching between them usually means changing environment variables,
 remembering which Maven installation to use, or relying on IDE settings that do
 not follow you into the terminal.
 
-| Task                     | Without `jup`                                      | With `jup`                                         |
-|--------------------------|----------------------------------------------------|----------------------------------------------------|
-| Switch projects          | Edit `JAVA_HOME` and `PATH`                        | Use the JDK saved for the project                  |
-| Select Maven             | Depend on whatever is on PATH                      | Prefer the Wrapper, otherwise save Maven from PATH |
-| Use private repositories | Repeat `--settings` or replace a global file       | Bind a named `settings.xml` to the project         |
-| Build from anywhere      | Change directories and reconstruct the environment | Select any initialized project                     |
-| Preserve the shell       | Risk affecting later commands                      | Change only the spawned build process              |
+| Task                     | Without `jup`                                      | With `jup`                                                    |
+|--------------------------|----------------------------------------------------|---------------------------------------------------------------|
+| Switch projects          | Edit `JAVA_HOME` and `PATH`                        | Automatically reuse the JDK version saved for the project     |
+| Select Maven             | Depend on whatever is on PATH                      | Automatically prefer the Wrapper or reuse saved Maven version |
+| Use private repositories | Repeat `--settings` or replace a global file       | Automatically apply the project's settings alias              |
+| Build from anywhere      | Change directories and reconstruct the environment | Automatically load the selected project's toolchain           |
+| Preserve the shell       | Risk affecting later commands                      | Automatically isolate changes to the spawned build process    |
 
-## How It Fits with Existing Tools
+`jup` complements existing Java tools instead of replacing them:
 
 - **SDKMAN!, asdf, and jEnv** install or switch tools for a user or shell. `jup`
   can discover the JDKs they installed.

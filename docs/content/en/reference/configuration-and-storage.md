@@ -9,11 +9,11 @@ weight: 30
 Project configurations, usage state, and Maven settings aliases live under
 `JAVAUP_HOME`; nothing is written into Maven project repositories.
 
-| Platform | Default `JAVAUP_HOME` |
-|---|---|
-| Windows | `%USERPROFILE%\.javaup` |
-| macOS | `$HOME/.javaup` |
-| Linux | `$HOME/.javaup` |
+| Platform | Default `JAVAUP_HOME`   |
+|----------|-------------------------|
+| Windows  | `%USERPROFILE%\.javaup` |
+| macOS    | `$HOME/.javaup`         |
+| Linux    | `$HOME/.javaup`         |
 
 ```text
 .javaup/

@@ -8,11 +8,11 @@ weight: 30
 
 项目配置、使用状态和 Maven settings 别名都位于 `JAVAUP_HOME` 下，不会写入 Maven 项目仓库。
 
-| 平台 | 默认 `JAVAUP_HOME` |
-|---|---|
+| 平台    | 默认 `JAVAUP_HOME`      |
+|---------|-------------------------|
 | Windows | `%USERPROFILE%\.javaup` |
-| macOS | `$HOME/.javaup` |
-| Linux | `$HOME/.javaup` |
+| macOS   | `$HOME/.javaup`         |
+| Linux   | `$HOME/.javaup`         |
 
 ```text
 .javaup/

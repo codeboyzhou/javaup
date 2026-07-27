@@ -46,10 +46,10 @@ Windows 产物位于 `dist/jup.exe`，macOS 和 Linux 产物位于 `dist/jup`。
 
 ## 安装器选项
 
-| 环境变量 | 用途 |
-|---|---|
-| `JAVAUP_VERSION` | 安装指定版本，例如 `v0.3.0` |
-| `JAVAUP_HOME` | 使用自定义的绝对安装及配置目录 |
+| 环境变量                | 用途                               |
+|-------------------------|------------------------------------|
+| `JAVAUP_VERSION`        | 安装指定版本，例如 `v0.3.0`        |
+| `JAVAUP_HOME`           | 使用自定义的绝对安装及配置目录     |
 | `JAVAUP_NO_MODIFY_PATH` | 安装时不修改 shell 配置或用户 PATH |
 
 验证安装结果：

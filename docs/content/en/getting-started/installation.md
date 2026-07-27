@@ -53,11 +53,11 @@ Linux. Archives, checksums, and installers can also be inspected on
 
 ## Installer Options
 
-| Variable | Purpose |
-|---|---|
-| `JAVAUP_VERSION` | Install a specific release, such as `v0.3.0` |
-| `JAVAUP_HOME` | Use a custom absolute installation and configuration directory |
-| `JAVAUP_NO_MODIFY_PATH` | Install without updating the shell profile or user PATH |
+| Variable                | Purpose                                                        |
+|-------------------------|----------------------------------------------------------------|
+| `JAVAUP_VERSION`        | Install a specific release, such as `v0.3.0`                   |
+| `JAVAUP_HOME`           | Use a custom absolute installation and configuration directory |
+| `JAVAUP_NO_MODIFY_PATH` | Install without updating the shell profile or user PATH        |
 
 Verify the result:
 
