@@ -18,6 +18,26 @@
   <img src="docs/demo/demo.gif" alt="javaup 演示">
 </p>
 
+## 为什么选择 javaup？
+
+一台开发机上往往同时存在多个 Java 项目。切换项目时，开发者经常需要修改环境变量、记住每个项目应该使用哪个 Maven，或者依赖一套无法带到终端中的 IDE 配置。
+
+| 操作            | 不使用 `jup`                         | 使用 `jup`                                     |
+|-----------------|--------------------------------------|------------------------------------------------|
+| 切换项目        | 手工修改 `JAVA_HOME` 和 `PATH`       | 自动复用项目保存的 JDK 版本                    |
+| 选择 Maven      | 依赖 PATH 中的版本                   | 自动优先使用 Wrapper 或复用已保存的 Maven 版本 |
+| 使用私服        | 反复传递 `--settings` 或替换全局文件 | 自动应用项目绑定的 settings 别名               |
+| 从任意位置构建  | 切换目录并重新配置环境               | 自动加载所选项目的完整工具链                   |
+| 保持 shell 干净 | 环境修改可能影响后续命令             | 自动将环境变更隔离在构建子进程中               |
+
+`jup` 是对现有 Java 工具的补充，而不是替代：
+
+- **SDKMAN!、asdf 和 jEnv** 负责安装工具或切换用户、shell 使用的版本；`jup` 可以发现它们已经安装的 JDK。
+- **Maven Wrapper** 为仓库固定 Maven 发行版；`jup` 会自动发现并优先使用。
+- **Maven Toolchains** 允许 Maven 插件选择 JDK；`jup` 还会读取 `<jdkHome>`，并控制启动 Maven 自身所用的 JDK。
+
+`jup` 补充的是项目级绑定：**这个 Maven 版本 + 这个 JDK + 这个 settings 别名**，以后统一通过一个稳定的命令启动。
+
 > [!IMPORTANT]
 > `jup` 负责选择本机已经安装的 JDK 和 Maven，不会下载或卸载它们。v0.3.0 目前只支持 Apache Maven。
 
@@ -57,8 +77,6 @@ jup run mvn clean package
 - 从 Maven、环境变量、PATH、Maven Toolchains 和常见平台目录中发现本机 JDK。
 - 只为构建子进程应用所选 JDK 和可选的 Maven settings 别名。
 - 全局管理并检查已初始化项目，不修改项目源码文件。
-
-详细的手工切换环境对比，以及与 SDKMAN!、asdf、jEnv、Maven Wrapper 和 Maven Toolchains 的关系，请阅读[为什么选择 javaup？](https://codeboyzhou.github.io/javaup/zh-cn/#为什么选择-javaup)。
 
 ## 文档
 

@@ -2,8 +2,6 @@
 title: Welcome to the javaup documentation
 ---
 
-# Use the Correct Java Toolchain for Every Maven Project—Automatically
-
 `javaup` (command: `jup`) is a Java toolchain manager built for Maven projects.
 It detects the Java version required by a project, selects a matching installed
 JDK, and remembers the project's Maven installation path, JDK, and optional

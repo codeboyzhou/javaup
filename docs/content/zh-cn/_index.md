@@ -2,8 +2,6 @@
 title: 欢迎来到 javaup 项目文档
 ---
 
-# 让每个 Maven 项目自动使用正确的 Java 工具链
-
 `javaup`（命令名 `jup`）是一款面向 Maven 项目的 Java 工具链管理器。它能自动识别项目所需的 Java 版本，选择匹配的本地 JDK，并记住项目使用的 Maven 版本路径、JDK 和可选的 `settings.xml`。之后的每次构建都会直接复用这套工具链，无需修改当前 shell 的 `JAVA_HOME` 或 `PATH`，也无需在不同版本之间来回手动切换。
 
 > `jup` 负责选择本机已经安装的工具链，不会下载或卸载 JDK/Maven。v0.3.0 目前只支持 Apache Maven。

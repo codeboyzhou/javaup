@@ -23,6 +23,33 @@ versions.
   <img src="docs/demo/demo.gif" alt="javaup demo">
 </p>
 
+## Why javaup?
+
+A development machine often hosts projects from several Java generations.
+Switching between them usually means changing environment variables,
+remembering which Maven installation to use, or relying on IDE settings that do
+not follow you into the terminal.
+
+| Task                     | Without `jup`                                      | With `jup`                                                    |
+|--------------------------|----------------------------------------------------|---------------------------------------------------------------|
+| Switch projects          | Edit `JAVA_HOME` and `PATH`                        | Automatically reuse the JDK version saved for the project     |
+| Select Maven             | Depend on whatever is on PATH                      | Automatically prefer the Wrapper or reuse saved Maven version |
+| Use private repositories | Repeat `--settings` or replace a global file       | Automatically apply the project's settings alias              |
+| Build from anywhere      | Change directories and reconstruct the environment | Automatically load the selected project's toolchain           |
+| Preserve the shell       | Risk affecting later commands                      | Automatically isolate changes to the spawned build process    |
+
+`jup` complements existing Java tools instead of replacing them:
+
+- **SDKMAN!, asdf, and jEnv** install or switch tools for a user or shell. `jup`
+  can discover the JDKs they installed.
+- **Maven Wrapper** pins the Maven distribution for a repository. `jup` detects
+  and prefers it automatically.
+- **Maven Toolchains** lets Maven plugins select a JDK. `jup` also discovers
+  `<jdkHome>` entries and controls the JDK that launches Maven itself.
+
+The layer `jup` adds is a local project binding: **this Maven executable + this
+JDK + this settings alias**, launched through one stable command.
+
 > [!IMPORTANT]
 > `jup` selects JDKs and Maven installations that are already present. It does
 > not download or uninstall them. Apache Maven is the only supported build tool
@@ -73,10 +100,6 @@ pipelines, it resolves the nearest initialized project without prompting.
   build process.
 - Manages and diagnoses initialized projects globally without modifying project
   source files.
-
-See [Why javaup?](https://codeboyzhou.github.io/javaup/#why-javaup) for a
-detailed comparison with manual environment switching, SDKMAN!, asdf, jEnv,
-Maven Wrapper, and Maven Toolchains.
 
 ## Documentation
 
