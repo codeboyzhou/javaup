@@ -65,6 +65,30 @@ go run build.go
 The build stops at the first failed stage. CI runs `go run build.go verify` on
 Ubuntu, Windows, and macOS.
 
+## Documentation development
+
+The documentation site requires Hugo 0.160.0 or newer. Before the first local
+preview, download the pinned `hugo-geekdoc` theme from the repository root:
+
+```shell
+bash docs/scripts/setup-theme.sh
+```
+
+On Windows, use PowerShell instead:
+
+```powershell
+.\docs\scripts\setup-theme.ps1
+```
+
+Then start the development server, including draft content:
+
+```shell
+hugo server --source docs -D
+```
+
+The downloaded theme is ignored by Git. Run the setup script again after the
+pinned theme version changes.
+
 ## Design and testing expectations
 
 - Keep argument parsing and presentation in `internal/cli`.

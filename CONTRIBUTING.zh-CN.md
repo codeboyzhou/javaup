@@ -59,6 +59,28 @@ go run build.go
 
 构建会在第一个失败阶段停止。CI 会在 Ubuntu、Windows 和 macOS 上执行 `go run build.go verify`。
 
+## 文档开发
+
+文档站点需要 Hugo 0.160.0 或更高版本。首次在本地预览前，请在仓库根目录下载项目固定版本的 `hugo-geekdoc` 主题：
+
+```shell
+bash docs/scripts/setup-theme.sh
+```
+
+Windows 环境请改用 PowerShell：
+
+```powershell
+.\docs\scripts\setup-theme.ps1
+```
+
+然后启动开发服务器并包含草稿内容：
+
+```shell
+hugo server --source docs -D
+```
+
+下载的主题已被 Git 忽略。项目固定的主题版本变更后，请重新运行主题安装脚本。
+
 ## 设计与测试要求
 
 - 参数解析和输出放在 `internal/cli`。
