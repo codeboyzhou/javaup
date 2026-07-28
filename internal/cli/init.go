@@ -18,7 +18,7 @@ type initializerFactory func() (projectInitializer, error)
 func newInitCommand(factory initializerFactory, workingDirectory func() (string, error)) *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Detect and initialize the current Java project",
+		Short: "Detect and save the current Maven project's toolchain",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
 			return runProjectProgressCommand(command, workingDirectory, func() (projectProgressAction, error) {

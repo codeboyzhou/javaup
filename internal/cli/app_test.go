@@ -86,7 +86,7 @@ func TestAppRun(t *testing.T) {
 			app := New(Options{
 				Name:        "jup",
 				ProductName: "javaup",
-				Description: "A command-line tool for managing Java versions.",
+				Description: "A Java toolchain manager for Maven projects.",
 				Version:     "v1.2.3",
 				Platform:    "testos/testarch",
 				Commit:      "0123456789ab",
@@ -149,7 +149,7 @@ func TestVersionOutput(t *testing.T) {
 	app := New(Options{
 		Name:        "jup",
 		ProductName: "javaup",
-		Description: "A command-line tool for managing Java versions.",
+		Description: "A Java toolchain manager for Maven projects.",
 		Version:     "v0.1.0",
 		Platform:    "windows/amd64",
 		Commit:      "64c2fb07bcad",

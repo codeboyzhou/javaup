@@ -51,7 +51,7 @@ func newRunCommandWithPicker(
 ) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "run",
-		Short: "Run a project build tool with its detected toolchain",
+		Short: "Run Maven projects with their saved toolchains",
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
 			return command.Help()
@@ -62,7 +62,7 @@ func newRunCommandWithPicker(
 		tool        buildtool.Type
 		description string
 	}{
-		{name: "mvn", tool: buildtool.Maven, description: "Run the detected project Maven"},
+		{name: "mvn", tool: buildtool.Maven, description: "Run Maven with a saved project toolchain"},
 	}
 	for _, buildTool := range buildTools {
 		command.AddCommand(newRunBuildToolCommand(

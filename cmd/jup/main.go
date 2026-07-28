@@ -1,4 +1,4 @@
-// Command jup manages Java versions from the command line.
+// Command jup manages Java toolchains for Maven projects.
 package main
 
 import (
@@ -15,7 +15,7 @@ func main() {
 	app := cli.New(cli.Options{
 		Name:        "jup",
 		ProductName: "javaup",
-		Description: "A command-line tool for managing Java versions.",
+		Description: "A Java toolchain manager for Maven projects.",
 		Version:     info.Version,
 		Platform:    info.Platform,
 		Commit:      info.Commit,
