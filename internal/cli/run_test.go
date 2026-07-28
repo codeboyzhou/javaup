@@ -24,6 +24,7 @@ type recordingProjectPicker struct {
 	root        string
 	tool        buildtool.Type
 	keyword     string
+	currentDir  string
 	interactive bool
 	streams     project.Streams
 	err         error
@@ -33,11 +34,13 @@ func (p *recordingProjectPicker) Pick(
 	_ context.Context,
 	tool buildtool.Type,
 	keyword string,
+	currentDirectory string,
 	interactive bool,
 	streams project.Streams,
 ) (string, error) {
 	p.tool = tool
 	p.keyword = keyword
+	p.currentDir = currentDirectory
 	p.interactive = interactive
 	p.streams = streams
 	return p.root, p.err
@@ -106,17 +109,15 @@ func TestRunCommandForwardsMavenArguments(t *testing.T) {
 	}
 }
 
-func TestRunCommandUsesInteractiveProjectSelection(t *testing.T) {
+func TestRunCommandUsesInteractiveProjectSelectionOutsideProjectRoot(t *testing.T) {
 	t.Parallel()
 
 	runner := &recordingProjectRunner{}
 	picker := &recordingProjectPicker{root: "selected-project"}
-	workingDirectoryCalled := false
 	command := newRunCommandWithPicker(
 		func() (projectRunner, error) { return runner, nil },
 		func() (string, error) {
-			workingDirectoryCalled = true
-			return "current-project", nil
+			return "current-directory", nil
 		},
 		func() (projectPicker, error) { return picker, nil },
 		func(io.Reader, io.Writer) bool { return true },
@@ -132,14 +133,14 @@ func TestRunCommandUsesInteractiveProjectSelection(t *testing.T) {
 	if err := command.ExecuteContext(context.Background()); err != nil {
 		t.Fatalf("ExecuteContext() error = %v", err)
 	}
-	if workingDirectoryCalled {
-		t.Error("working directory was resolved during interactive selection")
-	}
 	if picker.tool != buildtool.Maven || runner.root != "selected-project" {
 		t.Errorf("picker tool/runner root = %q/%q", picker.tool, runner.root)
 	}
 	if picker.keyword != "" || !picker.interactive {
 		t.Errorf("picker keyword/interactive = %q/%t, want empty/true", picker.keyword, picker.interactive)
+	}
+	if picker.currentDir != "current-directory" {
+		t.Errorf("picker current directory = %q, want current-directory", picker.currentDir)
 	}
 	if !reflect.DeepEqual(runner.args, []string{"clean", "package"}) {
 		t.Errorf("Run() args = %#v", runner.args)

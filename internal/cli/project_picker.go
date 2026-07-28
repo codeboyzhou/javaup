@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"text/template"
 
@@ -35,6 +37,7 @@ func (p *terminalProjectPicker) Pick(
 	_ context.Context,
 	tool buildtool.Type,
 	keyword string,
+	currentDirectory string,
 	interactive bool,
 	streams project.Streams,
 ) (string, error) {
@@ -45,6 +48,13 @@ func (p *terminalProjectPicker) Pick(
 	for _, warning := range warnings {
 		if streams.Stderr != nil {
 			_, _ = fmt.Fprintf(streams.Stderr, "jup: warning: %v\n", warning)
+		}
+	}
+	if keyword == "" {
+		for _, candidate := range candidates {
+			if sameProjectRoot(currentDirectory, candidate.ProjectRoot) {
+				return candidate.ProjectRoot, nil
+			}
 		}
 	}
 	candidates = filterProjectCandidates(candidates, keyword)
@@ -85,6 +95,23 @@ func (p *terminalProjectPicker) Pick(
 		return "", fmt.Errorf("select project: %w", err)
 	}
 	return candidates[index].ProjectRoot, nil
+}
+
+func sameProjectRoot(left, right string) bool {
+	if strings.TrimSpace(left) == "" || strings.TrimSpace(right) == "" {
+		return false
+	}
+	leftInfo, leftErr := os.Stat(left)
+	rightInfo, rightErr := os.Stat(right)
+	if leftErr == nil && rightErr == nil {
+		return os.SameFile(leftInfo, rightInfo)
+	}
+	left = filepath.Clean(left)
+	right = filepath.Clean(right)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(left, right)
+	}
+	return left == right
 }
 
 func writeSelectedProject(output io.Writer, candidate project.Candidate) error {

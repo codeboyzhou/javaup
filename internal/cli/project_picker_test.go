@@ -36,7 +36,7 @@ func TestTerminalProjectPickerHandlesArrowKeySelection(t *testing.T) {
 		warnings: []error{errors.New("stale project ignored")},
 	})
 
-	root, err := picker.Pick(context.Background(), buildtool.Maven, "", true, project.Streams{
+	root, err := picker.Pick(context.Background(), buildtool.Maven, "", "", true, project.Streams{
 		Stdin: input, Stdout: output, Stderr: errorsOutput,
 	})
 	if err != nil {
@@ -47,6 +47,36 @@ func TestTerminalProjectPickerHandlesArrowKeySelection(t *testing.T) {
 	}
 	if !strings.Contains(errorsOutput.String(), "stale project ignored") {
 		t.Errorf("Pick() stderr = %q, want warning", errorsOutput.String())
+	}
+}
+
+func TestTerminalProjectPickerUsesCurrentProjectRootWithoutPrompt(t *testing.T) {
+	t.Parallel()
+
+	currentRoot := t.TempDir()
+	otherRoot := t.TempDir()
+	output := &bytes.Buffer{}
+	picker := newTerminalProjectPicker(fakeProjectCatalog{candidates: []project.Candidate{
+		{Name: "other", ProjectRoot: otherRoot},
+		{Name: "current", ProjectRoot: currentRoot},
+	}})
+
+	root, err := picker.Pick(
+		context.Background(),
+		buildtool.Maven,
+		"",
+		currentRoot,
+		true,
+		project.Streams{Stdin: bytes.NewBuffer(nil), Stdout: output},
+	)
+	if err != nil {
+		t.Fatalf("Pick() error = %v", err)
+	}
+	if root != currentRoot {
+		t.Errorf("Pick() root = %q, want %q", root, currentRoot)
+	}
+	if output.Len() != 0 {
+		t.Errorf("Pick() output = %q, want no selection prompt", output.String())
 	}
 }
 
@@ -73,7 +103,7 @@ func TestTerminalProjectPickerRequiresConfiguredProject(t *testing.T) {
 	t.Parallel()
 
 	picker := newTerminalProjectPicker(fakeProjectCatalog{})
-	_, err := picker.Pick(context.Background(), buildtool.Maven, "", true, project.Streams{})
+	_, err := picker.Pick(context.Background(), buildtool.Maven, "", "", true, project.Streams{})
 	if err == nil || !strings.Contains(err.Error(), "run jup init") {
 		t.Fatalf("Pick() error = %v, want initialization guidance", err)
 	}
@@ -100,7 +130,7 @@ func TestTerminalProjectPickerFiltersByNameAndPath(t *testing.T) {
 				{Name: "other", ProjectRoot: "/projects/other"},
 			}})
 
-			root, err := picker.Pick(context.Background(), buildtool.Maven, test.keyword, false, project.Streams{})
+			root, err := picker.Pick(context.Background(), buildtool.Maven, test.keyword, "", false, project.Streams{})
 			if err != nil {
 				t.Fatalf("Pick() error = %v", err)
 			}
@@ -120,7 +150,7 @@ func TestTerminalProjectPickerShowsAutomaticallySelectedProject(t *testing.T) {
 		{Name: "other", ProjectRoot: `C:\Users\home\code\other`},
 	}})
 
-	root, err := picker.Pick(context.Background(), buildtool.Maven, "mcp-java", false, project.Streams{Stdout: output})
+	root, err := picker.Pick(context.Background(), buildtool.Maven, "mcp-java", "", false, project.Streams{Stdout: output})
 	if err != nil {
 		t.Fatalf("Pick() error = %v", err)
 	}
@@ -140,7 +170,7 @@ func TestTerminalProjectPickerRequiresMoreSpecificKeywordForMultipleNonInteracti
 		{Name: "example-api", ProjectRoot: "/projects/example-api"},
 		{Name: "example-web", ProjectRoot: "/projects/example-web"},
 	}})
-	_, err := picker.Pick(context.Background(), buildtool.Maven, "example", false, project.Streams{})
+	_, err := picker.Pick(context.Background(), buildtool.Maven, "example", "", false, project.Streams{})
 	if err == nil || !strings.Contains(err.Error(), "use a more specific keyword") {
 		t.Fatalf("Pick() error = %v, want ambiguity guidance", err)
 	}
@@ -152,7 +182,7 @@ func TestTerminalProjectPickerReportsUnmatchedKeyword(t *testing.T) {
 	picker := newTerminalProjectPicker(fakeProjectCatalog{candidates: []project.Candidate{
 		{Name: "service", ProjectRoot: "/projects/service"},
 	}})
-	_, err := picker.Pick(context.Background(), buildtool.Maven, "example", false, project.Streams{})
+	_, err := picker.Pick(context.Background(), buildtool.Maven, "example", "", false, project.Streams{})
 	if err == nil || !strings.Contains(err.Error(), `match "example"`) {
 		t.Fatalf("Pick() error = %v, want unmatched keyword error", err)
 	}

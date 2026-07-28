@@ -29,6 +29,7 @@ type projectPicker interface {
 		ctx context.Context,
 		tool buildtool.Type,
 		keyword string,
+		currentDirectory string,
 		interactive bool,
 		streams project.Streams,
 	) (string, error)
@@ -101,19 +102,24 @@ func newRunBuildToolCommand(
 				Stdout: command.OutOrStdout(),
 				Stderr: command.ErrOrStderr(),
 			}
-			var root string
+			var root, currentDirectory string
+			if keyword == "" {
+				currentDirectory, err = workingDirectory()
+				if err != nil {
+					return fmt.Errorf("resolve current directory: %w", err)
+				}
+			}
 			interactive := isInteractive(streams.Stdin, streams.Stdout)
 			if interactive || keyword != "" {
 				picker, pickerErr := pickerFactory()
 				if pickerErr != nil {
 					return pickerErr
 				}
-				root, err = picker.Pick(command.Context(), tool, keyword, interactive, streams)
+				root, err = picker.Pick(
+					command.Context(), tool, keyword, currentDirectory, interactive, streams,
+				)
 			} else {
-				root, err = workingDirectory()
-				if err != nil {
-					err = fmt.Errorf("resolve current directory: %w", err)
-				}
+				root = currentDirectory
 			}
 			if err != nil {
 				return err
