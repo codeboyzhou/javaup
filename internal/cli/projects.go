@@ -52,32 +52,33 @@ func newProjectsListCommand(factory projectsFactory) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			for _, warning := range warnings {
-				_, _ = fmt.Fprintf(command.ErrOrStderr(), "jup: warning: %v\n", warning)
-			}
 			if len(entries) == 0 {
+				writeProjectsWarnings(command.ErrOrStderr(), warnings, entries)
 				_, err = fmt.Fprintln(command.OutOrStdout(), "No initialized projects found.")
 				return err
 			}
 			if err := writeProjectsTable(command.OutOrStdout(), entries); err != nil {
 				return err
 			}
-			for _, entry := range entries {
-				if entry.Detail != "" {
-					_, _ = fmt.Fprintf(
-						command.ErrOrStderr(),
-						"jup: warning: %s: %s\n",
-						entry.DisplayPath(),
-						entry.Detail,
-					)
-				}
-			}
+			writeProjectsWarnings(command.ErrOrStderr(), warnings, entries)
 			return nil
 		},
 	}
 }
 
 func writeProjectsTable(writer io.Writer, entries []project.RegistryEntry) error {
+	return writeProjectsTableWithStyle(
+		writer,
+		entries,
+		newOutputStyle(writer, color.FgYellow),
+	)
+}
+
+func writeProjectsTableWithStyle(
+	writer io.Writer,
+	entries []project.RegistryEntry,
+	warning *color.Color,
+) error {
 	table := tablewriter.NewTable(
 		writer,
 		tablewriter.WithRenderer(renderer.NewBlueprint(tw.Rendition{
@@ -102,7 +103,7 @@ func writeProjectsTable(writer io.Writer, entries []project.RegistryEntry) error
 		if !entry.LastUsedAt.IsZero() {
 			lastUsed = entry.LastUsedAt.Local().Format("2006-01-02 15:04")
 		}
-		rows = append(rows, []string{
+		row := []string{
 			entry.Name,
 			tool,
 			javaVersion,
@@ -110,12 +111,69 @@ func writeProjectsTable(writer io.Writer, entries []project.RegistryEntry) error
 			strconv.FormatUint(entry.UseCount, 10),
 			lastUsed,
 			entry.DisplayPath(),
-		})
+		}
+		if entry.Status != project.RegistryAvailable {
+			for index := range row {
+				row[index] = warning.Sprint(row[index])
+			}
+		}
+		rows = append(rows, row)
 	}
 	if err := table.Bulk(rows); err != nil {
 		return err
 	}
 	return table.Render()
+}
+
+func writeProjectsWarnings(
+	writer io.Writer,
+	warnings []error,
+	entries []project.RegistryEntry,
+) {
+	writeProjectsWarningsWithStyle(
+		writer,
+		warnings,
+		entries,
+		newOutputStyle(writer, color.FgYellow),
+		newOutputStyle(writer, color.FgGreen),
+	)
+}
+
+func writeProjectsWarningsWithStyle(
+	writer io.Writer,
+	warnings []error,
+	entries []project.RegistryEntry,
+	warningStyle *color.Color,
+	hintStyle *color.Color,
+) {
+	for _, warning := range warnings {
+		_, _ = fmt.Fprintln(writer, warningStyle.Sprintf("jup: warning: %v", warning))
+	}
+
+	hasProblem := false
+	for _, entry := range entries {
+		if entry.Status != project.RegistryAvailable {
+			hasProblem = true
+		}
+		if entry.Detail != "" {
+			_, _ = fmt.Fprintln(
+				writer,
+				warningStyle.Sprintf(
+					"jup: warning: %s: %s",
+					entry.DisplayPath(),
+					entry.Detail,
+				),
+			)
+		}
+	}
+	if hasProblem {
+		_, _ = fmt.Fprintln(
+			writer,
+			hintStyle.Sprint(
+				"jup: hint: run `jup projects prune` to remove missing or invalid project records.",
+			),
+		)
+	}
 }
 
 func newProjectsRemoveCommand(factory projectsFactory) *cobra.Command {

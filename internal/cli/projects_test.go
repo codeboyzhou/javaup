@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/fatih/color"
 
 	"github.com/codeboyzhou/javaup/internal/buildtool"
 	"github.com/codeboyzhou/javaup/internal/project"
@@ -86,7 +90,94 @@ func TestProjectsListCommandShowsAllRegistryStates(t *testing.T) {
 	assertContains(t, stderr.String(), []string{
 		"jup: warning: usage data unavailable",
 		"jup: warning: /config/broken.json: invalid JSON",
+		"jup: hint: run `jup projects prune` to remove missing or invalid project records.",
 	})
+}
+
+func TestWriteProjectsTableHighlightsProblemRowsInYellow(t *testing.T) {
+	t.Parallel()
+
+	output := openProjectsOutputFile(t)
+	entries := []project.RegistryEntry{
+		{Name: "demo", ProjectRoot: "/projects/demo", Status: project.RegistryAvailable},
+		{Name: "missing", ProjectRoot: "/projects/missing", Status: project.RegistryMissing},
+	}
+	if err := writeProjectsTableWithStyle(output, entries, enabledYellow()); err != nil {
+		t.Fatalf("writeProjectsTable() error = %v", err)
+	}
+
+	contents := readProjectsOutputFile(t, output)
+	if strings.Contains(contents, "\x1b[33mdemo\x1b[0m") {
+		t.Errorf("available row was highlighted:\n%s", contents)
+	}
+	for _, value := range []string{"missing", "-", "0", "/projects/missing"} {
+		if !strings.Contains(contents, "\x1b[33m"+value+"\x1b[0m") {
+			t.Errorf("problem row value %q was not highlighted:\n%s", value, contents)
+		}
+	}
+}
+
+func TestWriteProjectsWarningsUsesYellowAndSuggestsPrune(t *testing.T) {
+	t.Parallel()
+
+	output := openProjectsOutputFile(t)
+	writeProjectsWarningsWithStyle(
+		output,
+		[]error{errors.New("usage data unavailable")},
+		[]project.RegistryEntry{{
+			ProjectRoot: "/projects/missing",
+			Status:      project.RegistryMissing,
+			Detail:      "directory does not exist",
+		}},
+		enabledYellow(),
+		enabledColor(color.FgGreen),
+	)
+
+	contents := readProjectsOutputFile(t, output)
+	for _, line := range []string{
+		"jup: warning: usage data unavailable",
+		"jup: warning: /projects/missing: directory does not exist",
+	} {
+		if !strings.Contains(contents, "\x1b[33m"+line+"\x1b[0m") {
+			t.Errorf("line %q was not highlighted:\n%s", line, contents)
+		}
+	}
+	hint := "jup: hint: run `jup projects prune` to remove missing or invalid project records."
+	if !strings.Contains(contents, "\x1b[32m"+hint+"\x1b[0m") {
+		t.Errorf("hint %q was not highlighted in green:\n%s", hint, contents)
+	}
+}
+
+func enabledYellow() *color.Color {
+	return enabledColor(color.FgYellow)
+}
+
+func enabledColor(attribute color.Attribute) *color.Color {
+	style := color.New(attribute)
+	style.EnableColor()
+	return style
+}
+
+func openProjectsOutputFile(t *testing.T) *os.File {
+	t.Helper()
+	output, err := os.CreateTemp(t.TempDir(), "projects-output-*.txt")
+	if err != nil {
+		t.Fatalf("CreateTemp() error = %v", err)
+	}
+	t.Cleanup(func() { _ = output.Close() })
+	return output
+}
+
+func readProjectsOutputFile(t *testing.T, output *os.File) string {
+	t.Helper()
+	if _, err := output.Seek(0, 0); err != nil {
+		t.Fatalf("Seek() error = %v", err)
+	}
+	contents, err := os.ReadFile(output.Name())
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	return string(contents)
 }
 
 func TestProjectsRemoveCommandUsesExplicitPath(t *testing.T) {
