@@ -84,7 +84,7 @@ func (m *MavenSettingsManager) findMavenProject(root string) (Config, error) {
 	}
 	if !found {
 		return Config{}, fmt.Errorf(
-			"no initialized javaup project found from %s; run jup init",
+			"no initialized javaup project found from %s; run `jup init`",
 			root,
 		)
 	}

@@ -104,7 +104,7 @@ func TestTerminalProjectPickerRequiresConfiguredProject(t *testing.T) {
 
 	picker := newTerminalProjectPicker(fakeProjectCatalog{})
 	_, err := picker.Pick(context.Background(), buildtool.Maven, "", "", true, project.Streams{})
-	if err == nil || !strings.Contains(err.Error(), "run jup init") {
+	if err == nil || !strings.Contains(err.Error(), "run `jup init`") {
 		t.Fatalf("Pick() error = %v, want initialization guidance", err)
 	}
 }

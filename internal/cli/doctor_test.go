@@ -60,7 +60,7 @@ func TestDoctorCommandReturnsFailureAfterRenderingReport(t *testing.T) {
 			Name:       "JDK",
 			Status:     project.CheckFailed,
 			Message:    "Saved JDK is missing",
-			Suggestion: "Run jup init again",
+			Suggestion: "Run `jup init` again",
 		}},
 	}}
 	command := newDoctorCommand(
@@ -80,7 +80,7 @@ func TestDoctorCommandReturnsFailureAfterRenderingReport(t *testing.T) {
 	}
 	assertContains(t, output.String(), []string{
 		"[FAIL] JDK - Saved JDK is missing",
-		"Fix: Run jup init again",
+		"Fix: Run `jup init` again",
 		"Unhealthy: 1 failure, 0 warnings.",
 	})
 }

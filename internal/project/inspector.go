@@ -28,7 +28,7 @@ func (i *Inspector) Inspect(root string) (Config, error) {
 		return Config{}, err
 	}
 	if !found {
-		return Config{}, fmt.Errorf("no initialized javaup project found from %s; run jup init", root)
+		return Config{}, fmt.Errorf("no initialized javaup project found from %s; run `jup init`", root)
 	}
 	return config, nil
 }

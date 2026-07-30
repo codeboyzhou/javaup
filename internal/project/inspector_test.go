@@ -49,7 +49,7 @@ func TestInspectorRequiresInitializedProject(t *testing.T) {
 	t.Parallel()
 
 	_, err := NewInspector(&fakeInspectionStore{}).Inspect(t.TempDir())
-	if err == nil || !strings.Contains(err.Error(), "run jup init") {
+	if err == nil || !strings.Contains(err.Error(), "run `jup init`") {
 		t.Fatalf("Inspect() error = %v, want initialization guidance", err)
 	}
 }

@@ -62,7 +62,7 @@ func (p *terminalProjectPicker) Pick(
 		if keyword != "" {
 			return "", fmt.Errorf("no configured %s projects match %q", tool.DisplayName(), keyword)
 		}
-		return "", fmt.Errorf("no configured %s projects found; run jup init in a project first", tool.DisplayName())
+		return "", fmt.Errorf("no configured %s projects found; run `jup init` in a project first", tool.DisplayName())
 	}
 	if keyword != "" && len(candidates) == 1 {
 		if err := writeSelectedProject(streams.Stdout, candidates[0]); err != nil {

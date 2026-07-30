@@ -179,7 +179,7 @@ func readProjectConfig(path string) (Config, error) {
 	}
 	if config.SchemaVersion != currentSchemaVersion {
 		return Config{}, fmt.Errorf(
-			"project configuration schema %d in %s is unsupported; run jup init again",
+			"project configuration schema %d in %s is unsupported; run `jup init` again",
 			config.SchemaVersion,
 			path,
 		)

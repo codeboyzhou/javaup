@@ -164,7 +164,7 @@ func TestDoctorReportsUninitializedProject(t *testing.T) {
 		t.Fatalf("Failed() = %d, want 1", report.Failed())
 	}
 	check := findDoctorCheck(t, report, "Configuration")
-	if !strings.Contains(check.Suggestion, "jup init") {
+	if !strings.Contains(check.Suggestion, "`jup init`") {
 		t.Errorf("suggestion = %q, want jup init guidance", check.Suggestion)
 	}
 }
@@ -183,7 +183,7 @@ func TestDoctorReportsUnreadableConfiguration(t *testing.T) {
 	}
 	assertDoctorCheck(t, report, "Configuration", CheckFailed, "invalid JSON")
 	check := findDoctorCheck(t, report, "Configuration")
-	if !strings.Contains(check.Suggestion, "jup init") {
+	if !strings.Contains(check.Suggestion, "`jup init`") {
 		t.Errorf("suggestion = %q, want jup init guidance", check.Suggestion)
 	}
 }

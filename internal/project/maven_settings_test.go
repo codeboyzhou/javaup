@@ -130,7 +130,7 @@ func TestMavenSettingsManagerRequiresInitializedProject(t *testing.T) {
 
 	manager := NewMavenSettingsManager(&fakeSettingsProjectStore{}, &fakeMavenSettingsResolver{})
 	_, _, err := manager.Use("/projects/demo", "intranet")
-	if err == nil || !strings.Contains(err.Error(), "jup init") {
+	if err == nil || !strings.Contains(err.Error(), "`jup init`") {
 		t.Fatalf("Use() error = %v, want initialization guidance", err)
 	}
 }

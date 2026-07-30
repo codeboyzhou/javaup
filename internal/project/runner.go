@@ -106,7 +106,7 @@ func (r *Runner) Run(
 		return err
 	}
 	if !found {
-		return fmt.Errorf("no initialized javaup project found from %s; run jup init", root)
+		return fmt.Errorf("no initialized javaup project found from %s; run `jup init`", root)
 	}
 
 	executable, err := configuredBuildToolExecutable(config, tool)
@@ -171,14 +171,14 @@ func (r *Runner) configuredBuildToolArguments(
 
 func configuredBuildToolExecutable(config Config, tool buildtool.Type) (string, error) {
 	if strings.TrimSpace(config.Java.Version) == "" {
-		return "", fmt.Errorf("project configuration has no Java version; run jup init again")
+		return "", fmt.Errorf("project configuration has no Java version; run `jup init` again")
 	}
 	javaHome := strings.TrimSpace(config.Java.Home)
 	if javaHome == "" {
-		return "", fmt.Errorf("project configuration has no JDK; run jup init again")
+		return "", fmt.Errorf("project configuration has no JDK; run `jup init` again")
 	}
 	if !filepath.IsAbs(javaHome) {
-		return "", fmt.Errorf("configured JDK path is not absolute; run jup init again")
+		return "", fmt.Errorf("configured JDK path is not absolute; run `jup init` again")
 	}
 
 	if config.BuildTool.Type != tool {
@@ -189,14 +189,14 @@ func configuredBuildToolExecutable(config Config, tool buildtool.Type) (string, 
 		)
 	}
 	if strings.TrimSpace(config.BuildTool.Version) == "" {
-		return "", fmt.Errorf("project configuration has no %s version; run jup init again", tool.DisplayName())
+		return "", fmt.Errorf("project configuration has no %s version; run `jup init` again", tool.DisplayName())
 	}
 	executable := strings.TrimSpace(config.BuildTool.Executable)
 	if executable == "" {
-		return "", fmt.Errorf("project configuration has no %s executable; run jup init again", tool.DisplayName())
+		return "", fmt.Errorf("project configuration has no %s executable; run `jup init` again", tool.DisplayName())
 	}
 	if !filepath.IsAbs(executable) {
-		return "", fmt.Errorf("configured %s path is not absolute; run jup init again", tool.DisplayName())
+		return "", fmt.Errorf("configured %s path is not absolute; run `jup init` again", tool.DisplayName())
 	}
 	return filepath.Clean(executable), nil
 }
@@ -206,12 +206,12 @@ func validateExecutable(path string, tool buildtool.Type) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("configured %s executable does not exist at %s; run jup init again", displayName, path)
+			return fmt.Errorf("configured %s executable does not exist at %s; run `jup init` again", displayName, path)
 		}
 		return fmt.Errorf("inspect configured %s executable: %w", displayName, err)
 	}
 	if info.IsDir() {
-		return fmt.Errorf("configured %s executable is a directory at %s; run jup init again", displayName, path)
+		return fmt.Errorf("configured %s executable is a directory at %s; run `jup init` again", displayName, path)
 	}
 	return nil
 }

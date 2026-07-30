@@ -183,7 +183,7 @@ func TestConfigStoreRejectsOutdatedConfiguration(t *testing.T) {
 	}
 
 	_, gotPath, found, err := store.Load(root)
-	if err == nil || !strings.Contains(err.Error(), "run jup init again") {
+	if err == nil || !strings.Contains(err.Error(), "run `jup init` again") {
 		t.Fatalf("Load() error = %v, want schema guidance", err)
 	}
 	if !found || gotPath != path {

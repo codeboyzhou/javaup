@@ -188,7 +188,7 @@ func TestRunnerRequiresInitializedProject(t *testing.T) {
 
 	runner := NewRunner(&fakeConfigFinder{}, &recordingProcessExecutor{})
 	err := runner.Run(context.Background(), t.TempDir(), buildtool.Maven, nil, Streams{})
-	if err == nil || !strings.Contains(err.Error(), "run jup init") {
+	if err == nil || !strings.Contains(err.Error(), "run `jup init`") {
 		t.Fatalf("Run() error = %v, want initialization guidance", err)
 	}
 }

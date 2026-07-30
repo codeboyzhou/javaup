@@ -97,7 +97,7 @@ func TestStoreRejectsUnknownAlias(t *testing.T) {
 	t.Parallel()
 
 	_, err := NewStore(filepath.Join(t.TempDir(), "settings.json")).Resolve("missing")
-	if err == nil || !strings.Contains(err.Error(), "jup settings add") {
+	if err == nil || !strings.Contains(err.Error(), "`jup settings add`") {
 		t.Fatalf("Resolve() error = %v, want add alias guidance", err)
 	}
 }

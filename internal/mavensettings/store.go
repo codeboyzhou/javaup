@@ -84,7 +84,7 @@ func (s *Store) Resolve(alias string) (Entry, error) {
 	}
 	settingsPath, found := config.Aliases[alias]
 	if !found {
-		return Entry{}, fmt.Errorf("maven settings alias %q is not configured; run jup settings add", alias)
+		return Entry{}, fmt.Errorf("maven settings alias %q is not configured; run `jup settings add`", alias)
 	}
 	settingsPath, err = validateSettingsFile(settingsPath)
 	if err != nil {
