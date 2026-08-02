@@ -12,7 +12,7 @@
   <a href="LICENSE"><img alt="开源协议" src="https://img.shields.io/github/license/codeboyzhou/javaup"></a>
 </p>
 
-`javaup`（命令名 `jup`）是一款面向 Maven 项目的 Java 工具链管理器。它能理解每个项目的工具链需求，自动识别所需的 Java 版本，选择匹配的本地 JDK，并记住应该配套使用的 Maven、JDK 和可选的 `settings.xml`。之后每次构建都会在新的子进程中加载这套工具链，不修改当前 shell 的 `JAVA_HOME`、`PATH` 或其他环境配置。
+`javaup` 是一款面向 Maven 项目的 Java 工具链管理器，能自动识别每个项目所需的 Java 版本和 `mvn` 程序路径，并记住为项目选择的 `settings.xml` 配置文件。只需初始化一次，之后在任意终端中用一条命令便可轻松完成项目构建，无需担心 Java 版本、`mvn` 程序路径或 `settings.xml` 文件配置错误。
 
 <p align="center">
   <img src="docs/demo/demo.gif" alt="javaup 演示">
@@ -20,15 +20,29 @@
 
 ## 为什么选择 javaup？
 
-一台开发机上经常需要同时构建面向 Java 8、Java 17、Java 21 等不同版本的项目。不使用 `jup` 时，每次切换都要重新拼装环境：选择正确的 JDK、找到项目期望的 Maven，有时还要指定不同的 `settings.xml`。这些信息容易遗忘，重复配置也十分繁琐。
+一台开发机上往往同时存在多个 Java 版本的 Maven 构建，例如 Java 8、Java 17 和 Java 21。不使用 `jup` 时，每次切换项目都要手工修改 `JAVA_HOME` 和 `PATH`，记住每个仓库应该使用哪个 Java 版本、哪个 Maven 版本，有时还会遇见不同的项目需要依赖不同的 `settings.xml` 文件配置，非常繁琐。
 
-| 操作            | 不使用 `jup`                         | 使用 `jup`                                     |
-|-----------------|--------------------------------------|------------------------------------------------|
-| 切换项目        | 手工修改 `JAVA_HOME` 和 `PATH`       | 直接复用该项目保存的 JDK                       |
-| 选择 Maven      | 依赖 PATH 中碰巧存在的 `mvn`         | 优先使用 Maven Wrapper 或保存的 Maven          |
-| 使用私服        | 反复传递 `--settings` 或替换全局文件 | 自动应用项目保存的 settings 别名               |
-| 从任意位置构建  | 切换目录并重新配置环境               | 选择已初始化项目并加载完整工具链               |
-| 保持 shell 干净 | 环境修改可能影响后续命令             | 将构建专用环境限制在子进程中                   |
+`javaup`（命令名 `jup`）会帮你解决这个问题。它能够自动识别 Maven 项目需要的 Java 版本，选择匹配的本地 JDK，并记住项目使用的 Maven、JDK 和可选的 `settings.xml` 文件路径。然后会在新建的子进程中完成项目构建，完全不动你本机的环境变量和当前 shell 的任何配置，安全、方便、快捷。
+
+```mermaid
+flowchart LR
+  subgraph before["以前，没有 jup，纯手动操作"]
+    direction TB
+    A["切换项目"] --> B["手动修改环境变量<br/>JAVA_HOME + PATH"]
+    B --> C["记住当前项目<br/>Maven + settings.xml"]
+    C --> D["手动完成项目构建"]
+    D -->|"经常重复这套操作"| A
+  end
+
+  subgraph after["现在，使用 jup，全自动管理"]
+    direction TB
+    E["在任意终端中执行<br/>jup run mvn"] --> F["jup会自动加载<br/>已保存的工具链"]
+    F --> G["jup会自动匹配<br/>JDK + Maven + settings.xml"]
+    G --> H["在隔离的进程中<br/>完成项目构建"]
+  end
+
+  before ~~~ after
+```
 
 `jup` 是对现有 Java 工具的补充，而不是替代：
 

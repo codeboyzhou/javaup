@@ -12,12 +12,11 @@
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/codeboyzhou/javaup"></a>
 </p>
 
-`javaup` (command: `jup`) is a project-aware Java toolchain manager for Maven
-builds. It detects the Java version a project needs, selects a matching local
-JDK, and remembers the Maven executable, JDK, and optional `settings.xml` that
-belong together. Every build then runs with the saved toolchain in a fresh child
-process, without changing `JAVA_HOME`, `PATH`, or any other setting in your
-current shell.
+`javaup` is a Java toolchain manager for Maven projects. It automatically
+detects the Java version and `mvn` executable each project needs, and remembers
+its selected `settings.xml`. Initialize a project once, then build it from any
+terminal with a single command — without worrying about using the wrong JDK,
+Maven executable, or `settings.xml` file.
 
 <p align="center">
   <img src="docs/demo/demo.gif" alt="javaup demo">
@@ -25,19 +24,38 @@ current shell.
 
 ## Why javaup?
 
-A single development machine often needs to build projects targeting Java 8,
-Java 17, Java 21, and beyond. Without `jup`, every switch means reconstructing
-the right environment: choosing a JDK, finding the expected Maven installation,
-and sometimes supplying a different `settings.xml`. That knowledge is easy to
-lose and tedious to repeat.
+A single dev machine often runs Maven builds that target several different Java
+versions, such as Java 8, Java 17, and Java 21. Without `jup`, every project
+switch means manually editing `JAVA_HOME` and `PATH`, keeping track of which
+Java version and which Maven each repository needs, and occasionally dealing
+with projects that rely on different `settings.xml` files. It all gets tedious.
 
-| Task                     | Without `jup`                                      | With `jup`                                                    |
-|--------------------------|----------------------------------------------------|---------------------------------------------------------------|
-| Switch projects          | Edit `JAVA_HOME` and `PATH`                        | Reuse the JDK saved for that project                          |
-| Select Maven             | Depend on whichever `mvn` is on PATH               | Prefer Maven Wrapper or reuse the saved Maven executable      |
-| Use private repositories | Repeat `--settings` or replace a global file       | Apply the project's saved settings alias automatically        |
-| Build from anywhere      | Change directories and reconstruct the environment | Select an initialized project and load its complete toolchain |
-| Preserve the shell       | Risk affecting later commands                      | Keep build-specific changes inside the child process          |
+`javaup` (command: `jup`) takes care of this for you. It automatically detects
+the Java version a Maven project needs, picks a matching local JDK, and
+remembers the Maven executable, JDK, and optional `settings.xml` path that
+project uses. It then runs the build in a fresh child process, leaving your
+machine's environment variables and your current shell completely untouched —
+safe, convenient, and fast.
+
+```mermaid
+flowchart LR
+  subgraph before["Before: no jup, all manual"]
+    direction TB
+    A["switch projects"] --> B["manually edit<br/>JAVA_HOME + PATH"]
+    B --> C["remember this project's<br/>Maven + settings.xml"]
+    C --> D["manually run the build"]
+    D -->|"repeat this routine"| A
+  end
+
+  subgraph after["Now: with jup, fully automatic"]
+    direction TB
+    E["run jup run mvn<br/>from any terminal"] --> F["jup auto-loads<br/>your saved toolchain"]
+    F --> G["jup auto-matches<br/>JDK + Maven + settings.xml"]
+    G --> H["build in an<br/>isolated process"]
+  end
+
+  before ~~~ after
+```
 
 `jup` complements existing Java tools instead of replacing them:
 
@@ -49,9 +67,9 @@ lose and tedious to repeat.
 - **Maven Toolchains** lets Maven plugins select a JDK. `jup` also discovers
   `<jdkHome>` entries and controls the JDK that launches Maven itself.
 
-The layer `jup` adds is a durable local project binding: **this Maven executable
-+ this JDK + this settings alias**, launched through one stable command from any
-terminal.
+The layer `jup` adds is a durable local project binding:
+**this Maven executable + this JDK + this settings alias**,
+launched through one stable command from any terminal.
 
 > [!IMPORTANT]
 > `jup` selects JDKs and Maven installations that are already present. It does
