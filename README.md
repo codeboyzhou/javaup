@@ -70,7 +70,7 @@ irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 |
 ```
 
 Prebuilt releases support Windows, macOS, and Linux on amd64 and arm64. See the
-[installation guide](https://codeboyzhou.github.io/javaup/getting-started/installation/)
+[installation guide](https://codeboyzhou.github.io/javaup/start-here/installation/)
 for checksums, `go install`, source builds, and installer options.
 
 ## Quick Start
@@ -100,23 +100,6 @@ pipelines, it resolves the nearest initialized project without prompting.
   build process.
 - Manages and diagnoses initialized projects globally without modifying project
   source files.
-
-## Documentation
-
-- [Documentation site](https://codeboyzhou.github.io/javaup/)
-- [Quick start](https://codeboyzhou.github.io/javaup/getting-started/quick-start/)
-- [User guide](https://codeboyzhou.github.io/javaup/user-guide/)
-- [Command reference](https://codeboyzhou.github.io/javaup/reference/command-reference/)
-- [Troubleshooting](https://codeboyzhou.github.io/javaup/reference/troubleshooting/)
-- [简体中文文档](https://codeboyzhou.github.io/javaup/zh-cn/)
-
-## Current Scope
-
-Maven is currently the only supported build tool. JDKs and Maven must already
-be installed, and saved project/tool paths are local absolute paths. Maven
-settings aliases store paths only, never file contents or credentials. See the
-[project scope](https://codeboyzhou.github.io/javaup/reference/project-scope/)
-for the complete boundaries.
 
 ## Contributing
 

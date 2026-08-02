@@ -11,8 +11,10 @@ coverage.out
 # VHS demo.gif generated files
 .vhs/
 
-# Hugo generated files and downloaded theme
-docs/public/
-docs/resources/_gen/
-docs/themes/
-docs/.hugo_build.lock
+# Astro documentation files
+docs/.astro/
+docs/dist/
+docs/node_modules/
+
+# Log files
+*.log

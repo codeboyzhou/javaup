@@ -55,7 +55,7 @@ Windows PowerShell 5.1 或更高版本：
 irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
 ```
 
-预编译版本支持 Windows、macOS 和 Linux 的 amd64 与 arm64。校验文件、`go install`、源码构建和安装器选项请参阅[安装指南](https://codeboyzhou.github.io/javaup/zh-cn/getting-started/installation/)。
+预编译版本支持 Windows、macOS 和 Linux 的 amd64 与 arm64。校验文件、`go install`、源码构建和安装器选项请参阅[安装指南](https://codeboyzhou.github.io/javaup/zh-cn/start-here/installation/)。
 
 ## 快速开始
 
@@ -77,19 +77,6 @@ jup run mvn clean package
 - 从 Maven、环境变量、PATH、Maven Toolchains 和常见平台目录中发现本机 JDK。
 - 只为构建子进程应用所选 JDK 和可选的 Maven settings 别名。
 - 全局管理并检查已初始化项目，不修改项目源码文件。
-
-## 文档
-
-- [简体中文文档站点](https://codeboyzhou.github.io/javaup/zh-cn/)
-- [快速开始](https://codeboyzhou.github.io/javaup/zh-cn/getting-started/quick-start/)
-- [使用指南](https://codeboyzhou.github.io/javaup/zh-cn/user-guide/)
-- [命令参考](https://codeboyzhou.github.io/javaup/zh-cn/reference/command-reference/)
-- [常见问题](https://codeboyzhou.github.io/javaup/zh-cn/reference/troubleshooting/)
-- [English Documentation](https://codeboyzhou.github.io/javaup/)
-
-## 当前边界
-
-目前只支持 Maven。JDK 和 Maven 需要提前安装，保存的项目与工具路径是当前用户的本地绝对路径。Maven settings 别名只保存路径，不保存文件内容或凭据。完整说明请阅读[项目边界](https://codeboyzhou.github.io/javaup/zh-cn/reference/project-scope/)。
 
 ## 参与贡献
 

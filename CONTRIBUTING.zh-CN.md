@@ -61,25 +61,20 @@ go run build.go
 
 ## 文档开发
 
-文档站点需要 Hugo 0.160.0 或更高版本。首次在本地预览前，请在仓库根目录下载项目固定版本的 `hugo-geekdoc` 主题：
+文档站点需要 Node.js 22.12 或更高版本。请从仓库根目录安装文档依赖：
 
 ```shell
-bash docs/scripts/setup-theme.sh
+cd docs
+npm install
 ```
 
-Windows 环境请改用 PowerShell：
-
-```powershell
-.\docs\scripts\setup-theme.ps1
-```
-
-然后启动开发服务器并包含草稿内容：
+然后启动 Astro 开发服务器：
 
 ```shell
-hugo server --source docs -D
+npm run dev
 ```
 
-下载的主题已被 Git 忽略。项目固定的主题版本变更后，请重新运行主题安装脚本。
+提交文档变更前请执行 `npm run build`。
 
 ## 设计与测试要求
 

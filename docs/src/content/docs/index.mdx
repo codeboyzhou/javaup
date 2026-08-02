@@ -1,0 +1,85 @@
+---
+title: javaup
+description: Project-aware Java toolchains for Maven builds.
+template: splash
+hero:
+  tagline: Let every Maven project use the right Java toolchain automatically.
+  actions:
+    - text: Get Started
+      link: ./start-here/installation/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/codeboyzhou/javaup
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Stop reconfiguring your Java environment
+
+A single dev machine often runs Maven builds that target several different Java
+versions, such as Java 8, Java 17, and Java 21. Without `jup`, every project
+switch means manually editing `JAVA_HOME` and `PATH`, keeping track of which
+Java version and which Maven each repository needs, and occasionally dealing
+with projects that rely on different `settings.xml` files. It all gets tedious.
+
+`javaup` (command: `jup`) takes care of this for you. It automatically detects
+the Java version a Maven project needs, picks a matching local JDK, and
+remembers the Maven executable, JDK, and optional `settings.xml` path that
+project uses. It then runs the build in a fresh child process, leaving your
+machine's environment variables and your current shell completely untouched —
+safe, convenient, and fast.
+
+```mermaid
+flowchart LR
+  subgraph before["Before: no jup, all manual"]
+    direction TB
+    A["switch projects"] --> B["manually edit<br/>JAVA_HOME + PATH"]
+    B --> C["remember this project's<br/>Maven + settings.xml"]
+    C --> D["manually run the build"]
+    D -->|"repeat this routine"| A
+  end
+
+  subgraph after["Now: with jup, fully automatic"]
+    direction TB
+    E["run jup run mvn<br/>from any terminal"] --> F["jup auto-loads<br/>your saved toolchain"]
+    F --> G["jup auto-matches<br/>JDK + Maven + settings.xml"]
+    G --> H["build in an<br/>isolated process"]
+  end
+
+  before ~~~ after
+```
+
+<CardGrid>
+  <Card title="Project-aware" icon="seti:java">
+    Bind each repository to the Maven executable, JDK, and settings it actually
+    needs, instead of relying on a vague global environment.
+  </Card>
+  <Card title="Build from anywhere" icon="rocket">
+    Select an initialized project and run its build without switching
+    directories or reassembling the environment by hand.
+  </Card>
+  <Card title="Fits your toolchain" icon="puzzle">
+    Prefer Maven Wrapper and discover JDKs installed by tools such as SDKMAN!
+    and asdf, or exposed through environment variables and PATH.
+  </Card>
+  <Card title="Cross-platform" icon="laptop">
+    Works on Windows, macOS, and Linux, on both amd64 and arm64.
+  </Card>
+</CardGrid>
+
+## Just type
+
+```shell
+cd /path/to/your/maven-project
+jup init
+jup status
+jup run mvn clean package
+```
+
+## Start here
+
+- [Install javaup](./start-here/installation/) on Windows, macOS, or Linux.
+- Follow the [Quick Start](./start-here/quick-start/) for your first build.
+- Keep the [Command Reference](./reference/command-reference/) nearby.

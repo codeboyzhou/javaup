@@ -7,14 +7,10 @@ on:
     paths:
       - ".github/workflows/docs.yml"
       - "docs/**"
-      - "README.md"
-      - "README.zh-CN.md"
   pull_request:
     paths:
       - ".github/workflows/docs.yml"
       - "docs/**"
-      - "README.md"
-      - "README.zh-CN.md"
   workflow_dispatch:
 
 permissions:
@@ -33,23 +29,20 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Install Hugo
-        env:
-          HUGO_VERSION: 0.164.0
-          HUGO_SHA256: d9c8b17285ea4ec004d9f814273ea910f2051ce02c284993fd1f91ba455ae50d
-        run: |
-          curl --fail --location --silent --show-error \
-            "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_${HUGO_VERSION}_linux-amd64.tar.gz" \
-            --output hugo.tar.gz
-          echo "${HUGO_SHA256}  hugo.tar.gz" | sha256sum --check --status
-          sudo tar -xzf hugo.tar.gz -C /usr/local/bin hugo
-          hugo version
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
 
-      - name: Install documentation theme
-        run: bash docs/scripts/setup-theme.sh
+      - name: Install dependencies
+        working-directory: docs
+        run: npm ci
 
       - name: Build documentation
-        run: hugo --source docs --gc
+        working-directory: docs
+        run: npm run build
 
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
@@ -59,7 +52,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5
         with:
-          path: docs/public
+          path: docs/dist
 
   deploy:
     name: Deploy

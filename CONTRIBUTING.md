@@ -67,27 +67,21 @@ Ubuntu, Windows, and macOS.
 
 ## Documentation development
 
-The documentation site requires Hugo 0.160.0 or newer. Before the first local
-preview, download the pinned `hugo-geekdoc` theme from the repository root:
+The documentation site requires Node.js 22.12 or newer. Install its dependencies
+from the repository root:
 
 ```shell
-bash docs/scripts/setup-theme.sh
+cd docs
+npm install
 ```
 
-On Windows, use PowerShell instead:
-
-```powershell
-.\docs\scripts\setup-theme.ps1
-```
-
-Then start the development server, including draft content:
+Then start the Astro development server:
 
 ```shell
-hugo server --source docs -D
+npm run dev
 ```
 
-The downloaded theme is ignored by Git. Run the setup script again after the
-pinned theme version changes.
+Run `npm run build` before submitting documentation changes.
 
 ## Design and testing expectations
 
