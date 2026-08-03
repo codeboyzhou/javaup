@@ -9,6 +9,7 @@ import (
 
 	"github.com/codeboyzhou/javaup/internal/buildtool"
 	"github.com/codeboyzhou/javaup/internal/javainfo"
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 func TestProjectManagerListsAvailableMissingAndInvalidProjects(t *testing.T) {
@@ -148,7 +149,7 @@ func TestProjectManagerPruneDryRunAndRemoval(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("usage records = %d, want 1", len(records))
 	}
-	if _, exists := records[projectPathIdentity(availableRoot)]; !exists {
+	if _, exists := records[pathutil.Identity(availableRoot)]; !exists {
 		t.Errorf("available usage was removed: %#v", records)
 	}
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/codeboyzhou/javaup/internal/buildtool"
 	"github.com/codeboyzhou/javaup/internal/javainfo"
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 func TestConfigStoreSavesProjectJSONStructure(t *testing.T) {
@@ -149,26 +150,8 @@ func TestConfigStoreFindsConfigurationFromProjectDescendant(t *testing.T) {
 	if path != savedPath {
 		t.Errorf("Find() path = %q, want %q", path, savedPath)
 	}
-	if !samePath(got.ProjectRoot, root) || got.Java != config.Java {
+	if !pathutil.Same(got.ProjectRoot, root) || got.Java != config.Java {
 		t.Errorf("Find() config = %#v, want %#v", got, config)
-	}
-}
-
-func TestSamePathResolvesSymbolicLinks(t *testing.T) {
-	t.Parallel()
-
-	temporary := t.TempDir()
-	target := filepath.Join(temporary, "target")
-	if err := os.Mkdir(target, 0o750); err != nil {
-		t.Fatalf("Mkdir() error = %v", err)
-	}
-	link := filepath.Join(temporary, "link")
-	if err := os.Symlink(target, link); err != nil {
-		t.Skipf("Symlink() error = %v", err)
-	}
-
-	if !samePath(link, target) {
-		t.Errorf("samePath(%q, %q) = false, want true", link, target)
 	}
 }
 
@@ -213,7 +196,7 @@ func TestConfigStoreListsValidProjectsAndReportsStaleEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
-	if len(configs) != 1 || !samePath(configs[0].ProjectRoot, validRoot) {
+	if len(configs) != 1 || !pathutil.Same(configs[0].ProjectRoot, validRoot) {
 		t.Errorf("List() configs = %#v, want only %s", configs, validRoot)
 	}
 	if len(warnings) != 2 {

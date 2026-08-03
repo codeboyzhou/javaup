@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/codeboyzhou/javaup/internal/buildtool"
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 func TestUsageStoreAppliesFourteenDayHalfLife(t *testing.T) {
@@ -28,11 +29,11 @@ func TestUsageStoreAppliesFourteenDayHalfLife(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	canonicalRoot, err := canonicalProjectRoot(root)
+	canonicalRoot, err := pathutil.Canonical(root)
 	if err != nil {
-		t.Fatalf("canonicalProjectRoot() error = %v", err)
+		t.Fatalf("pathutil.Canonical() error = %v", err)
 	}
-	record := usage[projectPathIdentity(canonicalRoot)]
+	record := usage[pathutil.Identity(canonicalRoot)]
 	if record.UseCount != 2 {
 		t.Errorf("UseCount = %d, want 2", record.UseCount)
 	}
@@ -89,7 +90,7 @@ func TestCatalogRanksByDecayedFrequencyAndFiltersBuildTool(t *testing.T) {
 	if len(candidates) != 2 {
 		t.Fatalf("List() candidates = %d, want 2", len(candidates))
 	}
-	if !samePath(candidates[0].ProjectRoot, frequentRoot) || !samePath(candidates[1].ProjectRoot, recentRoot) {
+	if !pathutil.Same(candidates[0].ProjectRoot, frequentRoot) || !pathutil.Same(candidates[1].ProjectRoot, recentRoot) {
 		t.Errorf("List() order = %q, %q; want frequent then recent", candidates[0].ProjectRoot, candidates[1].ProjectRoot)
 	}
 	if candidates[0].Name != candidates[1].Name {
@@ -126,7 +127,7 @@ func TestUsageStorePruneSupportsDryRun(t *testing.T) {
 			t.Fatalf("Touch(%s) error = %v", root, err)
 		}
 	}
-	keep := map[string]struct{}{projectPathIdentity(keepRoot): {}}
+	keep := map[string]struct{}{pathutil.Identity(keepRoot): {}}
 
 	removed, err := store.Prune(context.Background(), keep, true)
 	if err != nil {
@@ -157,7 +158,7 @@ func TestUsageStorePruneSupportsDryRun(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("records after prune = %d, want 1", len(records))
 	}
-	if _, exists := records[projectPathIdentity(keepRoot)]; !exists {
+	if _, exists := records[pathutil.Identity(keepRoot)]; !exists {
 		t.Errorf("kept record is missing: %#v", records)
 	}
 }

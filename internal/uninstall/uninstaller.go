@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/codeboyzhou/javaup/internal/apphome"
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 // Result describes an uninstall operation.
@@ -55,7 +56,7 @@ func (u *Uninstaller) Run(ctx context.Context) (Result, error) {
 			return Result{}, err
 		}
 	}
-	home, err = filepath.Abs(filepath.Clean(home))
+	home, err = pathutil.Canonical(home)
 	if err != nil {
 		return Result{}, fmt.Errorf("resolve %s: %w", apphome.EnvironmentVariable, err)
 	}
@@ -67,7 +68,7 @@ func (u *Uninstaller) Run(ctx context.Context) (Result, error) {
 			return Result{}, fmt.Errorf("resolve user home directory: %w", err)
 		}
 	}
-	userHome, err = filepath.Abs(filepath.Clean(userHome))
+	userHome, err = pathutil.Canonical(userHome)
 	if err != nil {
 		return Result{}, fmt.Errorf("resolve user home directory: %w", err)
 	}
@@ -82,7 +83,7 @@ func (u *Uninstaller) Run(ctx context.Context) (Result, error) {
 			return Result{}, fmt.Errorf("locate current executable: %w", err)
 		}
 	}
-	target, err = canonicalPath(target)
+	target, err = pathutil.Resolved(target)
 	if err != nil {
 		return Result{}, fmt.Errorf("resolve current executable: %w", err)
 	}
@@ -91,11 +92,11 @@ func (u *Uninstaller) Run(ctx context.Context) (Result, error) {
 	if runtime.GOOS == "windows" {
 		binaryName = "jup.exe"
 	}
-	expected, err := canonicalExpectedPath(filepath.Join(home, "bin", binaryName))
+	expected, err := pathutil.ResolvedOrClean(filepath.Join(home, "bin", binaryName))
 	if err != nil {
 		return Result{}, fmt.Errorf("resolve managed executable: %w", err)
 	}
-	if !samePath(target, expected) {
+	if !pathutil.Same(target, expected) {
 		return Result{}, fmt.Errorf(
 			"current executable is not managed by the javaup installer: %s (expected %s)",
 			target,
@@ -118,7 +119,7 @@ func (u *Uninstaller) Run(ctx context.Context) (Result, error) {
 
 func validateHome(home, userHome string, purge bool) error {
 	volumeRoot := filepath.Clean(filepath.VolumeName(home) + string(filepath.Separator))
-	if samePath(home, volumeRoot) {
+	if pathutil.Same(home, volumeRoot) {
 		return fmt.Errorf("refusing to use a filesystem root as %s: %s", apphome.EnvironmentVariable, home)
 	}
 	if purge && pathContains(home, userHome) {
@@ -133,38 +134,4 @@ func pathContains(parent, child string) bool {
 		return false
 	}
 	return relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)))
-}
-
-func canonicalPath(path string) (string, error) {
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	resolved, err := filepath.EvalSymlinks(absolute)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Clean(resolved), nil
-}
-
-func canonicalExpectedPath(path string) (string, error) {
-	resolved, err := canonicalPath(path)
-	if err == nil {
-		return resolved, nil
-	}
-	if !os.IsNotExist(err) {
-		return "", err
-	}
-	absolute, absoluteErr := filepath.Abs(path)
-	if absoluteErr != nil {
-		return "", absoluteErr
-	}
-	return filepath.Clean(absolute), nil
-}
-
-func samePath(left, right string) bool {
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(left, right)
-	}
-	return left == right
 }

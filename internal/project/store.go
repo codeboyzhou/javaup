@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"unicode"
 
 	"github.com/codeboyzhou/javaup/internal/apphome"
 	"github.com/codeboyzhou/javaup/internal/atomicfile"
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 // ConfigStore persists one JSON document per project.
@@ -45,7 +45,7 @@ func (s *ConfigStore) Save(config Config) (string, error) {
 		return "", fmt.Errorf("create project configuration directory: %w", err)
 	}
 
-	canonicalRoot, err := canonicalProjectRoot(config.ProjectRoot)
+	canonicalRoot, err := pathutil.Canonical(config.ProjectRoot)
 	if err != nil {
 		return "", err
 	}
@@ -59,7 +59,7 @@ func (s *ConfigStore) Save(config Config) (string, error) {
 
 // Load reads the configuration associated with projectRoot.
 func (s *ConfigStore) Load(projectRoot string) (config Config, path string, found bool, err error) {
-	canonicalRoot, err := canonicalProjectRoot(projectRoot)
+	canonicalRoot, err := pathutil.Canonical(projectRoot)
 	if err != nil {
 		return Config{}, "", false, err
 	}
@@ -72,11 +72,11 @@ func (s *ConfigStore) Load(projectRoot string) (config Config, path string, foun
 		return Config{}, path, true, err
 	}
 
-	configuredRoot, err := canonicalProjectRoot(config.ProjectRoot)
+	configuredRoot, err := pathutil.Canonical(config.ProjectRoot)
 	if err != nil {
 		return Config{}, path, true, fmt.Errorf("resolve configured project root: %w", err)
 	}
-	if !samePath(canonicalRoot, configuredRoot) {
+	if !pathutil.Same(canonicalRoot, configuredRoot) {
 		return Config{}, path, true, fmt.Errorf("project configuration root is %s, want %s", configuredRoot, canonicalRoot)
 	}
 	config.ProjectRoot = configuredRoot
@@ -136,7 +136,7 @@ func scanProjectConfigurations(baseDir string) ([]projectConfigurationRecord, er
 			continue
 		}
 		record.Config = config
-		root, rootErr := canonicalProjectRoot(config.ProjectRoot)
+		root, rootErr := pathutil.Canonical(config.ProjectRoot)
 		if rootErr != nil {
 			record.Err = fmt.Errorf("resolve configured project root in %s: %w", path, rootErr)
 			records = append(records, record)
@@ -189,7 +189,7 @@ func readProjectConfig(path string) (Config, error) {
 
 // Find searches start and its parents for an initialized project.
 func (s *ConfigStore) Find(start string) (config Config, path string, found bool, err error) {
-	directory, err := canonicalProjectRoot(start)
+	directory, err := pathutil.Canonical(start)
 	if err != nil {
 		return Config{}, "", false, err
 	}
@@ -199,7 +199,7 @@ func (s *ConfigStore) Find(start string) (config Config, path string, found bool
 			return config, path, found, err
 		}
 		parent := filepath.Dir(directory)
-		if samePath(parent, directory) {
+		if pathutil.Same(parent, directory) {
 			return Config{}, path, false, nil
 		}
 		directory = parent
@@ -208,7 +208,7 @@ func (s *ConfigStore) Find(start string) (config Config, path string, found bool
 
 // Delete removes the configuration associated with projectRoot.
 func (s *ConfigStore) Delete(projectRoot string) (path string, removed bool, err error) {
-	canonicalRoot, err := canonicalProjectRoot(projectRoot)
+	canonicalRoot, err := pathutil.Canonical(projectRoot)
 	if err != nil {
 		return "", false, err
 	}
@@ -223,24 +223,9 @@ func (s *ConfigStore) Delete(projectRoot string) (path string, removed bool, err
 }
 
 func configFileName(projectRoot string) string {
-	digest := sha256.Sum256([]byte(projectPathIdentity(projectRoot)))
+	digest := sha256.Sum256([]byte(pathutil.Identity(projectRoot)))
 	hash := hex.EncodeToString(digest[:])[:12]
 	return sanitizeName(filepath.Base(projectRoot)) + "-" + hash + ".json"
-}
-
-func projectPathIdentity(projectRoot string) string {
-	identity := filepath.Clean(projectRoot)
-	// Resolve links only for comparison. Stored and displayed paths retain the
-	// caller's spelling while aliases such as macOS /var and /private/var share
-	// an identity.
-	if resolved, err := filepath.EvalSymlinks(identity); err == nil {
-		identity = filepath.Clean(resolved)
-	}
-	if runtime.GOOS == "windows" {
-		// EvalSymlinks also normalizes Windows short (8.3) path components.
-		identity = strings.ToLower(identity)
-	}
-	return identity
 }
 
 func sanitizeName(value string) string {
@@ -255,29 +240,4 @@ func sanitizeName(value string) string {
 		return "project"
 	}
 	return value
-}
-
-func samePath(left, right string) bool {
-	left = filepath.Clean(left)
-	right = filepath.Clean(right)
-	if left == right {
-		return true
-	}
-	if runtime.GOOS == "windows" {
-		if strings.EqualFold(left, right) {
-			return true
-		}
-	}
-
-	resolvedLeft, leftErr := filepath.EvalSymlinks(left)
-	resolvedRight, rightErr := filepath.EvalSymlinks(right)
-	if leftErr != nil || rightErr != nil {
-		return false
-	}
-	resolvedLeft = filepath.Clean(resolvedLeft)
-	resolvedRight = filepath.Clean(resolvedRight)
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(resolvedLeft, resolvedRight)
-	}
-	return resolvedLeft == resolvedRight
 }

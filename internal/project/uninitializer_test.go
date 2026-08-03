@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 type fakeConfigRemover struct {
@@ -63,9 +65,9 @@ func TestUninitializerRemovesCurrentProjectConfiguration(t *testing.T) {
 	if path != store.path {
 		t.Errorf("Uninitialize() path = %q, want %q", path, store.path)
 	}
-	wantRoot, err := canonicalProjectRoot(root)
+	wantRoot, err := pathutil.Canonical(root)
 	if err != nil {
-		t.Fatalf("canonicalProjectRoot() error = %v", err)
+		t.Fatalf("pathutil.Canonical() error = %v", err)
 	}
 	if store.root != wantRoot {
 		t.Errorf("Delete() root = %q, want %q", store.root, wantRoot)

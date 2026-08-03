@@ -3,12 +3,12 @@ package project
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/codeboyzhou/javaup/internal/buildtool"
 	"github.com/codeboyzhou/javaup/internal/buildtool/maven"
 	"github.com/codeboyzhou/javaup/internal/javainfo"
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 type javaLocator interface {
@@ -68,7 +68,7 @@ func (i *Initializer) Initialize(ctx context.Context, root string, progress Prog
 		Step: 1, Total: initializationSteps, Name: projectStepName, State: ProgressStarted,
 		Message: "Inspecting current project directory",
 	})
-	canonicalRoot, err := canonicalProjectRoot(root)
+	canonicalRoot, err := pathutil.Canonical(root)
 	if err != nil {
 		reportFailure(progress, 1, projectStepName, err)
 		return Config{}, "", err
@@ -173,16 +173,4 @@ func reportFailure(progress ProgressFunc, step int, name string, err error) {
 	reportProgress(progress, ProgressEvent{
 		Step: step, Total: initializationSteps, Name: name, Message: err.Error(), State: ProgressFailed,
 	})
-}
-
-func canonicalProjectRoot(root string) (string, error) {
-	absoluteRoot, err := filepath.Abs(root)
-	if err != nil {
-		return "", fmt.Errorf("resolve project root: %w", err)
-	}
-	// Preserve the spelling supplied by the caller for stable persisted and
-	// displayed paths. Resolving links here can rewrite equivalent paths, such
-	// as /var to /private/var on macOS or Windows 8.3 path components.
-	// projectPathIdentity resolves existing paths when it needs a comparable key.
-	return filepath.Clean(absoluteRoot), nil
 }

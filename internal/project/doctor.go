@@ -11,6 +11,7 @@ import (
 	"github.com/codeboyzhou/javaup/internal/buildtool/maven"
 	"github.com/codeboyzhou/javaup/internal/javainfo"
 	"github.com/codeboyzhou/javaup/internal/mavensettings"
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 // CheckStatus describes the outcome of one project health check.
@@ -99,7 +100,7 @@ func NewDoctor(store configFinder, settings mavenSettingsResolver) *Doctor {
 func (d *Doctor) Diagnose(ctx context.Context, start string) (DoctorReport, error) {
 	config, _, found, err := d.store.Find(start)
 	if err != nil {
-		root, rootErr := canonicalProjectRoot(start)
+		root, rootErr := pathutil.Canonical(start)
 		if rootErr != nil {
 			return DoctorReport{}, rootErr
 		}
@@ -114,7 +115,7 @@ func (d *Doctor) Diagnose(ctx context.Context, start string) (DoctorReport, erro
 		}, nil
 	}
 	if !found {
-		root, rootErr := canonicalProjectRoot(start)
+		root, rootErr := pathutil.Canonical(start)
 		if rootErr != nil {
 			return DoctorReport{}, rootErr
 		}

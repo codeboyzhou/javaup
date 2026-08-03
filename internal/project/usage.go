@@ -14,6 +14,7 @@ import (
 	"github.com/codeboyzhou/javaup/internal/apphome"
 	"github.com/codeboyzhou/javaup/internal/atomicfile"
 	"github.com/codeboyzhou/javaup/internal/buildtool"
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 	"github.com/gofrs/flock"
 )
 
@@ -65,7 +66,7 @@ func (s *UsageStore) Load() (map[string]Usage, error) {
 
 // Touch records one build attempt for projectRoot using a decaying frequency score.
 func (s *UsageStore) Touch(ctx context.Context, projectRoot string, at time.Time) error {
-	canonicalRoot, err := canonicalProjectRoot(projectRoot)
+	canonicalRoot, err := pathutil.Canonical(projectRoot)
 	if err != nil {
 		return err
 	}
@@ -74,7 +75,7 @@ func (s *UsageStore) Touch(ctx context.Context, projectRoot string, at time.Time
 		if err != nil {
 			return err
 		}
-		key := projectPathIdentity(canonicalRoot)
+		key := pathutil.Identity(canonicalRoot)
 		usage := registry.Projects[key]
 		usage.Score = decayedUsageScore(usage, at) + 1
 		usage.ProjectRoot = canonicalRoot
@@ -87,7 +88,7 @@ func (s *UsageStore) Touch(ctx context.Context, projectRoot string, at time.Time
 
 // Delete removes the usage record for projectRoot.
 func (s *UsageStore) Delete(ctx context.Context, projectRoot string) error {
-	canonicalRoot, err := canonicalProjectRoot(projectRoot)
+	canonicalRoot, err := pathutil.Canonical(projectRoot)
 	if err != nil {
 		return err
 	}
@@ -96,7 +97,7 @@ func (s *UsageStore) Delete(ctx context.Context, projectRoot string) error {
 		if err != nil {
 			return err
 		}
-		delete(registry.Projects, projectPathIdentity(canonicalRoot))
+		delete(registry.Projects, pathutil.Identity(canonicalRoot))
 		if len(registry.Projects) == 0 {
 			if err := os.Remove(s.path); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return fmt.Errorf("remove project usage: %w", err)
@@ -261,7 +262,7 @@ func (c *Catalog) List(tool buildtool.Type) ([]Candidate, []error, error) {
 		if config.BuildTool.Type != tool {
 			continue
 		}
-		record := usage[projectPathIdentity(config.ProjectRoot)]
+		record := usage[pathutil.Identity(config.ProjectRoot)]
 		candidates = append(candidates, Candidate{
 			Name:        filepath.Base(config.ProjectRoot),
 			ProjectRoot: config.ProjectRoot,

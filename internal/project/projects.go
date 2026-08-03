@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codeboyzhou/javaup/internal/buildtool"
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 // RegistryStatus describes whether a saved project can still be found.
@@ -94,7 +95,7 @@ func (m *Registry) List() ([]RegistryEntry, []error, error) {
 		if entries[index].ProjectRoot == "" {
 			continue
 		}
-		record := usage[projectPathIdentity(entries[index].ProjectRoot)]
+		record := usage[pathutil.Identity(entries[index].ProjectRoot)]
 		entries[index].LastUsedAt = record.LastUsedAt
 		entries[index].UseCount = record.UseCount
 	}
@@ -104,7 +105,7 @@ func (m *Registry) List() ([]RegistryEntry, []error, error) {
 
 // Remove deletes one project's configuration and usage record by path.
 func (m *Registry) Remove(ctx context.Context, root string) (RegistryEntry, bool, error) {
-	canonicalRoot, err := canonicalProjectRoot(root)
+	canonicalRoot, err := pathutil.Canonical(root)
 	if err != nil {
 		return RegistryEntry{}, false, err
 	}
@@ -147,7 +148,7 @@ func (m *Registry) Prune(ctx context.Context, dryRun bool) (PruneResult, error) 
 	keep := make(map[string]struct{})
 	for _, entry := range entries {
 		if entry.Status == RegistryAvailable {
-			keep[projectPathIdentity(entry.ProjectRoot)] = struct{}{}
+			keep[pathutil.Identity(entry.ProjectRoot)] = struct{}{}
 			continue
 		}
 		result.Projects = append(result.Projects, entry)

@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"golang.org/x/mod/semver"
+
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 const (
@@ -106,13 +108,9 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 			return Result{}, fmt.Errorf("locate current executable: %w", err)
 		}
 	}
-	target, err = filepath.EvalSymlinks(target)
+	target, err = pathutil.Resolved(target)
 	if err != nil {
 		return Result{}, fmt.Errorf("resolve current executable: %w", err)
-	}
-	target, err = filepath.Abs(target)
-	if err != nil {
-		return Result{}, fmt.Errorf("resolve current executable path: %w", err)
 	}
 
 	archiveName := releaseArchiveName(result.Latest, u.GOOS, u.GOARCH)

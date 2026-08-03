@@ -14,6 +14,7 @@ import (
 	"github.com/codeboyzhou/javaup/internal/buildtool"
 	"github.com/codeboyzhou/javaup/internal/javainfo"
 	"github.com/codeboyzhou/javaup/internal/mavensettings"
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 type fakeConfigFinder struct {
@@ -86,7 +87,7 @@ func TestRunnerRunsConfiguredMavenWithProjectJava(t *testing.T) {
 	}
 	assertEnvironmentValue(t, executor.spec.environment, "JAVA_HOME", javaHome)
 	pathValue := environmentValue(executor.spec.environment, "PATH")
-	if first := strings.Split(pathValue, string(os.PathListSeparator))[0]; !samePath(first, filepath.Join(javaHome, "bin")) {
+	if first := strings.Split(pathValue, string(os.PathListSeparator))[0]; !pathutil.Same(first, filepath.Join(javaHome, "bin")) {
 		t.Errorf("PATH first entry = %q, want %q", first, filepath.Join(javaHome, "bin"))
 	}
 	if executor.spec.streams != streams {

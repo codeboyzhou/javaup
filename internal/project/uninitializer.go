@@ -3,6 +3,8 @@ package project
 import (
 	"context"
 	"fmt"
+
+	"github.com/codeboyzhou/javaup/internal/pathutil"
 )
 
 const uninitializationSteps = 2
@@ -49,7 +51,7 @@ func (u *Uninitializer) Uninitialize(
 	progress ProgressFunc,
 ) (path string, removed bool, err error) {
 	reportUninitProgress(progress, 1, projectStepName, ProgressStarted, "Resolving current project directory")
-	canonicalRoot, err := canonicalProjectRoot(root)
+	canonicalRoot, err := pathutil.Canonical(root)
 	if err != nil {
 		reportUninitFailure(progress, 1, projectStepName, err)
 		return "", false, err
@@ -65,7 +67,7 @@ func (u *Uninitializer) Uninitialize(
 	}
 	projectRoot := canonicalRoot
 	if found {
-		projectRoot, err = canonicalProjectRoot(config.ProjectRoot)
+		projectRoot, err = pathutil.Canonical(config.ProjectRoot)
 		if err != nil {
 			err = fmt.Errorf("resolve configured project root: %w", err)
 			reportUninitFailure(progress, 1, projectStepName, err)
