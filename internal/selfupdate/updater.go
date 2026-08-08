@@ -28,6 +28,7 @@ import (
 const (
 	defaultAPIBase     = "https://api.github.com/repos/codeboyzhou/javaup"
 	defaultReleaseBase = "https://github.com/codeboyzhou/javaup/releases"
+	defaultHTTPTimeout = 10 * time.Minute
 	maxMetadataSize    = 1 << 20
 	maxArchiveSize     = 128 << 20
 	maxBinarySize      = 64 << 20
@@ -58,7 +59,7 @@ func New(currentVersion string) *Updater {
 	return &Updater{
 		CurrentVersion: currentVersion,
 		HTTPClient: &http.Client{
-			Timeout: 2 * time.Minute,
+			Timeout: defaultHTTPTimeout,
 		},
 		APIBase:     defaultAPIBase,
 		ReleaseBase: defaultReleaseBase,
@@ -93,10 +94,19 @@ func (u *Updater) Check(ctx context.Context) (Result, error) {
 
 // Update downloads, verifies, and installs the latest release when it is newer.
 func (u *Updater) Update(ctx context.Context) (Result, error) {
+	return u.UpdateWithProgress(ctx, nil)
+}
+
+// UpdateWithProgress downloads, verifies, and installs the latest release while reporting progress.
+func (u *Updater) UpdateWithProgress(ctx context.Context, progress ProgressFunc) (Result, error) {
+	reportProgress(progress, ProgressEvent{Stage: ProgressChecking})
 	result, err := u.Check(ctx)
 	if err != nil || !result.Updated {
 		return result, err
 	}
+	reportProgress(progress, ProgressEvent{
+		Stage: ProgressAvailable, Current: result.Current, Latest: result.Latest,
+	})
 	if err := validatePlatform(u.GOOS, u.GOARCH); err != nil {
 		return Result{}, err
 	}
@@ -115,7 +125,9 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 
 	archiveName := releaseArchiveName(result.Latest, u.GOOS, u.GOARCH)
 	downloadBase := strings.TrimRight(u.ReleaseBase, "/") + "/download/" + result.Latest
-	checksums, err := u.download(ctx, downloadBase+"/checksums.txt", maxMetadataSize)
+	checksumsURL := downloadBase + "/checksums.txt"
+	reportProgress(progress, ProgressEvent{Stage: ProgressFetchingChecksums, URL: checksumsURL})
+	checksums, err := u.download(ctx, checksumsURL, maxMetadataSize)
 	if err != nil {
 		return Result{}, fmt.Errorf("download checksums: %w", err)
 	}
@@ -123,7 +135,18 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	archive, err := u.download(ctx, downloadBase+"/"+archiveName, maxArchiveSize)
+	archiveURL := downloadBase + "/" + archiveName
+	reportProgress(progress, ProgressEvent{Stage: ProgressConnecting, Name: archiveName, URL: archiveURL})
+	archive, err := u.downloadWithProgress(
+		ctx,
+		archiveURL,
+		maxArchiveSize,
+		func(downloaded, total int64) {
+			reportProgress(progress, ProgressEvent{
+				Stage: ProgressDownloading, Name: archiveName, Downloaded: downloaded, Total: total,
+			})
+		},
+	)
 	if err != nil {
 		return Result{}, fmt.Errorf("download %s: %w", archiveName, err)
 	}
@@ -131,7 +154,9 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 	if !strings.EqualFold(expected, hex.EncodeToString(actual[:])) {
 		return Result{}, fmt.Errorf("checksum mismatch for %s", archiveName)
 	}
+	reportProgress(progress, ProgressEvent{Stage: ProgressVerifying, Name: archiveName})
 
+	reportProgress(progress, ProgressEvent{Stage: ProgressExtracting, Name: archiveName})
 	staged, err := stageBinary(archive, u.GOOS, target)
 	if err != nil {
 		return Result{}, err
@@ -143,6 +168,7 @@ func (u *Updater) Update(ctx context.Context) (Result, error) {
 		}
 	}()
 
+	reportProgress(progress, ProgressEvent{Stage: ProgressInstalling, Name: filepath.Base(target)})
 	pending, err := u.apply(staged, target)
 	if err != nil {
 		return Result{}, fmt.Errorf("replace current executable: %w", err)
@@ -170,6 +196,15 @@ func (u *Updater) latestVersion(ctx context.Context) (string, error) {
 }
 
 func (u *Updater) download(ctx context.Context, url string, limit int64) ([]byte, error) {
+	return u.downloadWithProgress(ctx, url, limit, nil)
+}
+
+func (u *Updater) downloadWithProgress(
+	ctx context.Context,
+	url string,
+	limit int64,
+	progress func(downloaded, total int64),
+) ([]byte, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -185,7 +220,17 @@ func (u *Updater) download(ctx context.Context, url string, limit int64) ([]byte
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 		return nil, fmt.Errorf("server returned %s", response.Status)
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	reader := io.Reader(io.LimitReader(response.Body, limit+1))
+	if progress != nil {
+		progress(0, response.ContentLength)
+		reader = &downloadProgressReader{
+			reader:     reader,
+			total:      response.ContentLength,
+			lastReport: time.Now(),
+			report:     progress,
+		}
+	}
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -193,6 +238,25 @@ func (u *Updater) download(ctx context.Context, url string, limit int64) ([]byte
 		return nil, fmt.Errorf("response exceeds %d bytes", limit)
 	}
 	return data, nil
+}
+
+type downloadProgressReader struct {
+	reader     io.Reader
+	total      int64
+	downloaded int64
+	lastReport time.Time
+	report     func(downloaded, total int64)
+}
+
+func (r *downloadProgressReader) Read(buffer []byte) (int, error) {
+	read, err := r.reader.Read(buffer)
+	r.downloaded += int64(read)
+	now := time.Now()
+	if err == io.EOF || now.Sub(r.lastReport) >= 100*time.Millisecond {
+		r.report(r.downloaded, r.total)
+		r.lastReport = now
+	}
+	return read, err
 }
 
 type version struct {

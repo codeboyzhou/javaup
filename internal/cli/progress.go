@@ -34,7 +34,8 @@ func newProgressRenderer(writer io.Writer) *progressRenderer {
 
 func newOutputStyle(writer io.Writer, attributes ...color.Attribute) *color.Color {
 	style := color.New(attributes...)
-	if _, interactive := writer.(*os.File); !interactive {
+	output, fileOutput := writer.(*os.File)
+	if !fileOutput || !isTerminalDescriptor(output.Fd()) {
 		style.DisableColor()
 	}
 	return style

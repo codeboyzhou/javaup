@@ -5,12 +5,13 @@ import (
 	"fmt"
 
 	"github.com/codeboyzhou/javaup/internal/selfupdate"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
 type updateService interface {
 	Check(context.Context) (selfupdate.Result, error)
-	Update(context.Context) (selfupdate.Result, error)
+	UpdateWithProgress(context.Context, selfupdate.ProgressFunc) (selfupdate.Result, error)
 }
 
 func newUpdateCommand(newService func() updateService) *cobra.Command {
@@ -27,40 +28,33 @@ func newUpdateCommand(newService func() updateService) *cobra.Command {
 					return err
 				}
 				if result.Updated {
-					_, err = fmt.Fprintf(
-						command.OutOrStdout(),
-						"Update available: %s -> %s\n",
-						result.Current,
-						result.Latest,
-					)
+					output := command.OutOrStdout()
+					message := fmt.Sprintf("Update available: %s -> %s", result.Current, result.Latest)
+					_, err = fmt.Fprintln(output, newOutputStyle(output, color.FgYellow).Sprint(message))
 					return err
 				}
-				_, err = fmt.Fprintf(command.OutOrStdout(), "Already up to date (%s)\n", result.Current)
+				output := command.OutOrStdout()
+				message := fmt.Sprintf("Already up to date (%s)", result.Current)
+				_, err = fmt.Fprintln(output, newOutputStyle(output, color.FgGreen).Sprint(message))
 				return err
 			}
 
-			result, err := service.Update(command.Context())
+			progress := newUpdateProgressRenderer(command.OutOrStdout())
+			result, err := service.UpdateWithProgress(command.Context(), progress.Report)
+			if finishErr := progress.Finish(); finishErr != nil {
+				return finishErr
+			}
 			if err != nil {
 				return err
 			}
 			if !result.Updated {
-				_, err = fmt.Fprintf(command.OutOrStdout(), "Already up to date (%s)\n", result.Current)
-				return err
-			}
-			if result.Pending {
-				_, err = fmt.Fprintf(
+				_, err = fmt.Fprintln(
 					command.OutOrStdout(),
-					"Downloaded jup %s; it will be installed after this process exits.\n",
-					result.Latest,
+					progress.Success(fmt.Sprintf("Already up to date (%s)", result.Current)),
 				)
 				return err
 			}
-			_, err = fmt.Fprintf(
-				command.OutOrStdout(),
-				"Updated jup from %s to %s.\n",
-				result.Current,
-				result.Latest,
-			)
+			_, err = fmt.Fprintln(command.OutOrStdout(), progress.Success("Updated successfully"))
 			return err
 		},
 	}

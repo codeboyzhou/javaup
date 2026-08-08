@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseAndCompareVersions(t *testing.T) {
@@ -44,6 +45,15 @@ func TestParseAndCompareVersions(t *testing.T) {
 	}
 	if compareVersions(older, older) != 0 {
 		t.Error("equal versions should compare equally")
+	}
+}
+
+func TestNewUsesLongDownloadTimeout(t *testing.T) {
+	t.Parallel()
+
+	updater := New("v1.0.0")
+	if updater.HTTPClient.Timeout != 10*time.Minute {
+		t.Errorf("HTTP timeout = %s, want %s", updater.HTTPClient.Timeout, 10*time.Minute)
 	}
 }
 
@@ -126,6 +136,74 @@ func TestUpdateDownloadsVerifiesAndStagesRelease(t *testing.T) {
 	}
 	if !applied || !result.Updated || result.Pending || result.Latest != "v1.1.0" {
 		t.Errorf("Update() = %+v, applied = %t", result, applied)
+	}
+}
+
+func TestUpdateReportsProgress(t *testing.T) {
+	t.Parallel()
+
+	binary := []byte("new jup binary")
+	archive := tarGzipArchive(t, map[string][]byte{"package/jup": binary})
+	archiveName := "javaup-1.1.0-linux-amd64.tar.gz"
+	digest := sha256.Sum256(archive)
+	server := releaseServer(t, archiveName, archive, fmt.Sprintf("%x  %s\n", digest, archiveName))
+	defer server.Close()
+
+	target := filepath.Join(t.TempDir(), "jup")
+	if err := os.WriteFile(target, []byte("old binary"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	updater := New("v1.0.0")
+	updater.APIBase = server.URL
+	updater.ReleaseBase = server.URL
+	updater.GOOS = "linux"
+	updater.GOARCH = "amd64"
+	updater.ExecutablePath = target
+	updater.apply = func(_, _ string) (bool, error) { return false, nil }
+
+	var events []ProgressEvent
+	if _, err := updater.UpdateWithProgress(context.Background(), func(event ProgressEvent) {
+		events = append(events, event)
+	}); err != nil {
+		t.Fatalf("UpdateWithProgress() error = %v", err)
+	}
+
+	wantStages := []ProgressStage{
+		ProgressChecking,
+		ProgressAvailable,
+		ProgressFetchingChecksums,
+		ProgressConnecting,
+		ProgressDownloading,
+		ProgressVerifying,
+		ProgressExtracting,
+		ProgressInstalling,
+	}
+	var stages []ProgressStage
+	var lastDownload ProgressEvent
+	for _, event := range events {
+		if len(stages) == 0 || stages[len(stages)-1] != event.Stage {
+			stages = append(stages, event.Stage)
+		}
+		if event.Stage == ProgressDownloading {
+			lastDownload = event
+		}
+	}
+	if len(stages) != len(wantStages) {
+		t.Fatalf("progress stages = %v, want %v; events = %#v", stages, wantStages, events)
+	}
+	for index, stage := range wantStages {
+		if stages[index] != stage {
+			t.Errorf("stage %d = %q, want %q", index, stages[index], stage)
+		}
+	}
+	if lastDownload.Downloaded != int64(len(archive)) || lastDownload.Total != int64(len(archive)) {
+		t.Errorf("final download progress = %+v, want %d bytes", lastDownload, len(archive))
+	}
+	if events[2].URL != server.URL+"/download/v1.1.0/checksums.txt" {
+		t.Errorf("checksums URL = %q", events[2].URL)
+	}
+	if events[3].URL != server.URL+"/download/v1.1.0/"+archiveName {
+		t.Errorf("archive URL = %q", events[3].URL)
 	}
 }
 
