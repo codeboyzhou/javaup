@@ -44,7 +44,7 @@ Windows 产物位于 `dist/jup.exe`，macOS 和 Linux 产物位于 `dist/jup`。
 
 | 环境变量                | 用途                               |
 |-------------------------|------------------------------------|
-| `JAVAUP_VERSION`        | 安装指定版本，例如 `v0.3.0`        |
+| `JAVAUP_VERSION`        | 安装指定版本，例如 `v0.4.0`        |
 | `JAVAUP_HOME`           | 使用自定义的绝对安装及配置目录     |
 | `JAVAUP_NO_MODIFY_PATH` | 安装时不修改 shell 配置或用户 PATH |
 
@@ -53,11 +53,11 @@ Windows 产物位于 `dist/jup.exe`，macOS 和 Linux 产物位于 `dist/jup`。
 设置 `JAVAUP_VERSION` 可以安装指定版本而不是最新版：
 
 ```shell
-curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/install.sh | JAVAUP_VERSION=v0.3.0 sh
+curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/install.sh | JAVAUP_VERSION=v0.4.0 sh
 ```
 
 ```powershell
-$env:JAVAUP_VERSION = 'v0.3.0'
+$env:JAVAUP_VERSION = 'v0.4.0'
 irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
 ```
 

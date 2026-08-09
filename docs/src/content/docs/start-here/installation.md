@@ -51,7 +51,7 @@ Linux. Archives, checksums, and installers can also be inspected on
 
 | Variable                | Purpose                                                        |
 |-------------------------|----------------------------------------------------------------|
-| `JAVAUP_VERSION`        | Install a specific release, such as `v0.3.0`                   |
+| `JAVAUP_VERSION`        | Install a specific release, such as `v0.4.0`                   |
 | `JAVAUP_HOME`           | Use a custom absolute installation and configuration directory |
 | `JAVAUP_NO_MODIFY_PATH` | Install without updating the shell profile or user PATH        |
 
@@ -60,11 +60,11 @@ Linux. Archives, checksums, and installers can also be inspected on
 Set `JAVAUP_VERSION` to install a specific release instead of the latest one:
 
 ```shell
-curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/install.sh | JAVAUP_VERSION=v0.3.0 sh
+curl -fsSL https://github.com/codeboyzhou/javaup/releases/latest/download/install.sh | JAVAUP_VERSION=v0.4.0 sh
 ```
 
 ```powershell
-$env:JAVAUP_VERSION = 'v0.3.0'
+$env:JAVAUP_VERSION = 'v0.4.0'
 irm https://github.com/codeboyzhou/javaup/releases/latest/download/install.ps1 | iex
 ```
 
