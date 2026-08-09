@@ -1,4 +1,49 @@
+@font-face {
+  font-family: 'Liberation Mono';
+  src:
+    local('Liberation Mono Regular'),
+    local('LiberationMono-Regular'),
+    url('/fonts/liberation-mono-regular.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Liberation Mono';
+  src:
+    local('Liberation Mono Italic'),
+    local('LiberationMono-Italic'),
+    url('/fonts/liberation-mono-italic.woff2') format('woff2');
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Liberation Mono';
+  src:
+    local('Liberation Mono Bold'),
+    local('LiberationMono-Bold'),
+    url('/fonts/liberation-mono-bold.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Liberation Mono';
+  src:
+    local('Liberation Mono Bold Italic'),
+    local('LiberationMono-BoldItalic'),
+    url('/fonts/liberation-mono-bold-italic.woff2') format('woff2');
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
+  --sl-font-mono: 'Liberation Mono';
   --sl-color-accent-low: #0d2a22;
   --sl-color-accent: #20b486;
   --sl-color-accent-high: #b6f5dd;
