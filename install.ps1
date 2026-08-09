@@ -33,6 +33,8 @@ $JavaupHome = if ($env:JAVAUP_HOME) {
   Join-Path $env:USERPROFILE '.javaup'
 }
 $JavaupNoModifyPath = $env:JAVAUP_NO_MODIFY_PATH
+$DownloadTimeoutSeconds = 10 * 60
+$DownloadTimeoutMilliseconds = $DownloadTimeoutSeconds * 1000
 $RequestHeaders = @{
   Accept = 'application/vnd.github+json'
   'User-Agent' = 'javaup-installer'
@@ -44,6 +46,129 @@ function Write-Step([string]$Message) {
 
 function Stop-Install([string]$Message) {
   throw $Message
+}
+
+function Format-ByteSize([long]$Bytes) {
+  if ($Bytes -lt 1KB) {
+    return "$Bytes B"
+  }
+  $value = [double]$Bytes
+  foreach ($unit in @('KB', 'MB', 'GB', 'TB')) {
+    $value /= 1024
+    if ($value -lt 1024 -or $unit -eq 'TB') {
+      return '{0:F1} {1}' -f $value, $unit
+    }
+  }
+}
+
+function Format-DownloadProgress(
+  [string]$Name,
+  [long]$Downloaded,
+  [long]$Total,
+  [int]$TerminalWidth
+) {
+  if ($Total -le 0) {
+    return '{0} ({1} downloaded)' -f $Name, (Format-ByteSize $Downloaded)
+  }
+
+  $percentage = [Math]::Min(100, [long](($Downloaded * 100) / $Total))
+  $prefix = '{0} ({1}) [' -f $Name, (Format-ByteSize $Total)
+  $suffix = '] {0,3}%' -f $percentage
+  $barWidth = [Math]::Max($TerminalWidth - $prefix.Length - $suffix.Length, 1)
+  $completed = [int](($percentage * $barWidth) / 100)
+  $bar = '=' * $completed
+  if ($completed -lt $barWidth) {
+    $bar += '>' + (' ' * ($barWidth - $completed - 1))
+  }
+  return $prefix + $bar + $suffix
+}
+
+function Receive-File(
+  [string]$Uri,
+  [string]$Destination,
+  [string]$DisplayName,
+  [switch]$ShowProgress
+) {
+  $request = [System.Net.HttpWebRequest]::Create($Uri)
+  $request.Accept = $RequestHeaders.Accept
+  $request.UserAgent = $RequestHeaders.'User-Agent'
+  $request.AllowAutoRedirect = $true
+  $request.Timeout = $DownloadTimeoutMilliseconds
+  $request.ReadWriteTimeout = $DownloadTimeoutMilliseconds
+
+  $response = $null
+  $inputStream = $null
+  $outputStream = $null
+  $downloadTimer = [Diagnostics.Stopwatch]::StartNew()
+  try {
+    $response = $request.GetResponse()
+    $totalBytes = [long]$response.ContentLength
+    $inputStream = $response.GetResponseStream()
+    $outputStream = [System.IO.File]::Create($Destination)
+    $buffer = New-Object byte[] 65536
+    $receivedBytes = [long]0
+    $lastUpdate = [DateTime]::MinValue
+    $interactive = $ShowProgress -and -not [Console]::IsOutputRedirected
+    $downloadLineOpen = $false
+
+    if ($ShowProgress) {
+      Write-Step "Downloading new version from $Uri"
+      if ($interactive) {
+        $terminalWidth = try { [Console]::WindowWidth } catch { 80 }
+        if ($terminalWidth -le 0) { $terminalWidth = 80 }
+        $progressText = '==> ' + (Format-DownloadProgress $DisplayName 0 $totalBytes ($terminalWidth - 4))
+        Write-Host "`r$progressText" -ForegroundColor Cyan -NoNewline
+        $downloadLineOpen = $true
+      } else {
+        $size = if ($totalBytes -gt 0) { ' (' + (Format-ByteSize $totalBytes) + ')' } else { '' }
+        Write-Step "$DisplayName$size..."
+      }
+    }
+
+    while ($true) {
+      $remaining = $DownloadTimeoutMilliseconds - $downloadTimer.ElapsedMilliseconds
+      if ($remaining -le 0) {
+        throw [TimeoutException]::new("download timed out after 10 minutes: $Uri")
+      }
+      if ($inputStream.CanTimeout) {
+        $inputStream.ReadTimeout = [int]$remaining
+      }
+      $read = $inputStream.Read($buffer, 0, $buffer.Length)
+      if ($read -le 0) {
+        break
+      }
+
+      $outputStream.Write($buffer, 0, $read)
+      $receivedBytes += $read
+
+      if (-not $interactive) {
+        continue
+      }
+
+      $now = [DateTime]::UtcNow
+      if (($now - $lastUpdate).TotalMilliseconds -lt 100 -and
+          ($totalBytes -le 0 -or $receivedBytes -lt $totalBytes)) {
+        continue
+      }
+      $lastUpdate = $now
+      $terminalWidth = try { [Console]::WindowWidth } catch { 80 }
+      if ($terminalWidth -le 0) { $terminalWidth = 80 }
+      $progressText = '==> ' + (Format-DownloadProgress $DisplayName $receivedBytes $totalBytes ($terminalWidth - 4))
+      Write-Host "`r$progressText" -ForegroundColor Cyan -NoNewline
+    }
+
+    if ($interactive) {
+      $terminalWidth = try { [Console]::WindowWidth } catch { 80 }
+      if ($terminalWidth -le 0) { $terminalWidth = 80 }
+      $progressText = '==> ' + (Format-DownloadProgress $DisplayName $receivedBytes $totalBytes ($terminalWidth - 4))
+      Write-Host "`r$progressText" -ForegroundColor Cyan -NoNewline
+    }
+  } finally {
+    if ($downloadLineOpen) { Write-Host }
+    if ($outputStream) { $outputStream.Dispose() }
+    if ($inputStream) { $inputStream.Dispose() }
+    if ($response) { $response.Dispose() }
+  }
 }
 
 function Get-Architecture {
@@ -80,7 +205,8 @@ function Resolve-Version {
   }
 
   Write-Step 'Resolving the latest GitHub release'
-  $release = Invoke-RestMethod -Uri "$ApiBase/releases/latest" -Headers $RequestHeaders
+  $release = Invoke-RestMethod -Uri "$ApiBase/releases/latest" -Headers $RequestHeaders `
+    -TimeoutSec $DownloadTimeoutSeconds
   $tag = [string]$release.tag_name
   if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
     Stop-Install "latest release has an invalid tag: $tag"
@@ -235,13 +361,12 @@ try {
     $archive = Join-Path $temporary $archiveName
     $checksums = Join-Path $temporary 'checksums.txt'
 
-    Write-Step "Downloading $archiveName"
-    Invoke-WebRequest -UseBasicParsing -Uri "$downloadBase/$archiveName" -Headers $RequestHeaders -OutFile $archive
-    Invoke-WebRequest -UseBasicParsing -Uri "$downloadBase/checksums.txt" -Headers $RequestHeaders -OutFile $checksums
+    Receive-File "$downloadBase/$archiveName" $archive $archiveName -ShowProgress
+    Receive-File "$downloadBase/checksums.txt" $checksums 'checksums.txt'
 
-    Write-Step 'Verifying SHA-256 checksum'
     $expected = Get-ExpectedChecksum $checksums $archiveName
     Test-Checksum $archive $expected
+    Write-Step 'Checking hash... ok'
 
     $expanded = Join-Path $temporary 'expanded'
     Expand-Archive -LiteralPath $archive -DestinationPath $expanded

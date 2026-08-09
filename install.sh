@@ -14,6 +14,7 @@ set -eu
 
 repository="codeboyzhou/javaup"
 release_base="https://github.com/$repository/releases"
+download_timeout=600
 javaup_home=${JAVAUP_HOME:-"$HOME/.javaup"}
 no_modify_path=${JAVAUP_NO_MODIFY_PATH:-}
 temporary=
@@ -57,7 +58,8 @@ resolve_version() {
     write_step "Using requested version $tag" >&2
   else
     write_step 'Resolving the latest GitHub release' >&2
-    latest_url=$(curl -fsSL -o /dev/null -w '%{url_effective}' "$release_base/latest") ||
+    latest_url=$(curl -fsSL --max-time "$download_timeout" \
+      -o /dev/null -w '%{url_effective}' "$release_base/latest") ||
       die 'could not resolve the latest GitHub release'
     latest_url=${latest_url%/}
     tag=${latest_url##*/}
@@ -188,8 +190,12 @@ checksums="$temporary/checksums.txt"
 expanded="$temporary/expanded"
 
 write_step "Downloading $archive_name"
-curl -fL --retry 3 --retry-delay 1 -o "$archive" "$download_base/$archive_name"
-curl -fL --retry 3 --retry-delay 1 -o "$checksums" "$download_base/checksums.txt"
+curl -fL --progress-bar --max-time "$download_timeout" --retry 3 \
+  --retry-delay 1 --retry-max-time "$download_timeout" \
+  -o "$archive" "$download_base/$archive_name"
+curl -fsSL --max-time "$download_timeout" --retry 3 \
+  --retry-delay 1 --retry-max-time "$download_timeout" \
+  -o "$checksums" "$download_base/checksums.txt"
 
 write_step 'Verifying SHA-256 checksum'
 expected=$(awk -v name="$archive_name" '$2 == name || $2 == "*" name { print tolower($1); exit }' "$checksums")
