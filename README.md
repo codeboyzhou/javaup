@@ -106,10 +106,10 @@ jup status
 jup run mvn clean package
 ```
 
-In an interactive terminal, `jup run mvn` lets you select any initialized
-project, with frequently and recently used projects ranked first. In CI or
-redirected pipelines, it resolves the nearest initialized project without
-prompting.
+At an initialized project root, `jup run mvn` uses that project directly. In
+other interactive locations, it lets you select any initialized project, with
+frequently and recently used projects ranked first. In CI or redirected
+pipelines, it resolves the nearest initialized project without prompting.
 
 ## What It Does
 

@@ -22,7 +22,9 @@ interactive selector; no matches produce an error.
 
 ## Interactive Terminals
 
-Every invocation:
+At an initialized project root, `jup run mvn` without `--project` uses the
+current project directly without showing the selector. In other interactive
+locations, each invocation:
 
 1. loads all initialized Maven projects, even outside a project directory;
 2. orders them by a time-decaying recent-use score;
