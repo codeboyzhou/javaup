@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -74,6 +75,36 @@ func TestTerminalProjectPickerUsesCurrentProjectRootWithoutPrompt(t *testing.T) 
 	}
 	if root != currentRoot {
 		t.Errorf("Pick() root = %q, want %q", root, currentRoot)
+	}
+	if output.Len() != 0 {
+		t.Errorf("Pick() output = %q, want no selection prompt", output.String())
+	}
+}
+
+func TestTerminalProjectPickerUsesInitializedAncestorWithoutPrompt(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	module := filepath.Join(root, "module")
+	output := &bytes.Buffer{}
+	picker := newTerminalProjectPicker(fakeProjectCatalog{candidates: []project.Candidate{
+		{Name: "other", ProjectRoot: filepath.Join(root, "other")},
+		{Name: "root", ProjectRoot: root},
+	}})
+
+	got, err := picker.Pick(
+		context.Background(),
+		buildtool.Maven,
+		"",
+		module,
+		true,
+		project.Streams{Stdin: bytes.NewBuffer(nil), Stdout: output},
+	)
+	if err != nil {
+		t.Fatalf("Pick() error = %v", err)
+	}
+	if got != module {
+		t.Errorf("Pick() root = %q, want %q", got, module)
 	}
 	if output.Len() != 0 {
 		t.Errorf("Pick() output = %q, want no selection prompt", output.String())

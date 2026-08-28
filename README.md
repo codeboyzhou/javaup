@@ -106,10 +106,11 @@ jup status
 jup run mvn clean package
 ```
 
-At an initialized project root, `jup run mvn` uses that project directly. In
-other interactive locations, it lets you select any initialized project, with
-frequently and recently used projects ranked first. In CI or redirected
-pipelines, it resolves the nearest initialized project without prompting.
+At an initialized project root or inside one, `jup run mvn` uses the nearest
+saved project and starts Maven in the current directory. In other interactive
+locations, it lets you select any initialized project, with frequently and
+recently used projects ranked first. In CI or redirected pipelines, it resolves
+the nearest initialized project without prompting.
 
 ## What It Does
 

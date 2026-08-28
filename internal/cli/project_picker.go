@@ -55,6 +55,11 @@ func (p *terminalProjectPicker) Pick(
 			if sameProjectRoot(currentDirectory, candidate.ProjectRoot) {
 				return candidate.ProjectRoot, nil
 			}
+			if isAncestorPath(candidate.ProjectRoot, currentDirectory) {
+				// Keep the current module directory as Maven's working directory.
+				// Runner resolves the nearest saved project from this directory.
+				return currentDirectory, nil
+			}
 		}
 	}
 	candidates = filterProjectCandidates(candidates, keyword)
@@ -112,6 +117,30 @@ func sameProjectRoot(left, right string) bool {
 		return strings.EqualFold(left, right)
 	}
 	return left == right
+}
+
+func isAncestorPath(parent, child string) bool {
+	if strings.TrimSpace(parent) == "" || strings.TrimSpace(child) == "" {
+		return false
+	}
+	if sameProjectRoot(parent, child) {
+		return false
+	}
+
+	parent = filepath.Clean(parent)
+	child = filepath.Clean(child)
+	if runtime.GOOS == "windows" {
+		parent = strings.ToLower(parent)
+		child = strings.ToLower(child)
+	}
+
+	relative, err := filepath.Rel(parent, child)
+	if err != nil {
+		return false
+	}
+	return relative != "." &&
+		relative != ".." &&
+		!strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 func writeSelectedProject(output io.Writer, candidate project.Candidate) error {

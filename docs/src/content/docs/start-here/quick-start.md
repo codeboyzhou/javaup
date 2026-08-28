@@ -29,9 +29,11 @@ Java home: /opt/jdks/temurin-17
 Maven settings: default
 ```
 
-In an interactive terminal, `jup run mvn` lists every initialized Maven
-project. Select one with the arrow keys and Enter. Frequently and recently used
-projects rise to the top, and Maven starts in the selected project root.
+Inside an initialized Maven project, `jup run mvn` uses the nearest saved
+project and starts Maven in the current directory. In any other interactive
+location, it lists every initialized Maven project. Select one with the arrow
+keys and Enter. Frequently and recently used projects rise to the top, and Maven
+starts in the selected project root.
 
 In CI or redirected pipelines, no picker is displayed. `jup` resolves the
 nearest initialized project from the current directory and starts Maven there.
